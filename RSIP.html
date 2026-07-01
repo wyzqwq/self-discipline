@@ -1,0 +1,1100 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="自控台">
+<meta name="theme-color" content="#F6F4EE">
+<link rel="apple-touch-icon" href="data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><rect width='180' height='180' rx='40' fill='%235B8A72'/><path d='M90 40 C90 70 70 90 50 100 C80 100 110 90 130 60' stroke='white' stroke-width='8' fill='none' stroke-linecap='round'/><circle cx='50' cy='100' r='8' fill='white'/><circle cx='90' cy='40' r='8' fill='white'/></svg>">
+<link rel="manifest" href='data:application/manifest+json,{"name":"自控台 · RSIP/CTDP","short_name":"自控台","start_url":".","display":"standalone","background_color":"#F6F4EE","theme_color":"#5B8A72","icons":[{"src":"data:image/svg+xml;utf8,<svg xmlns=%22http://www.w3.org/2000/svg%22 width=%22192%22 height=%22192%22><rect width=%22192%22 height=%22192%22 rx=%2240%22 fill=%22%235B8A72%22/></svg>","sizes":"192x192","type":"image/svg+xml"}]}'>
+<title>自控台 · RSIP / CTDP</title>
+<style>
+  :root{
+    --bg:#F6F4EE;
+    --bg-soft:#EFEEE8;
+    --surface:#FFFFFF;
+    --ink:#2E2E2A;
+    --ink-soft:#6B6B63;
+    --ink-faint:#9A9A90;
+    --line:#E4E2DA;
+    --line-soft:#EFEDE5;
+    --sage:#5B8A72;
+    --sage-soft:#E7F0EA;
+    --sage-deep:#3F6B55;
+    --clay:#C97B5E;
+    --clay-soft:#F6E8E1;
+    --amber:#D9A441;
+    --amber-soft:#F7EED7;
+    --shadow:0 1px 2px rgba(46,46,42,.04), 0 6px 20px rgba(46,46,42,.06);
+    --shadow-lg:0 2px 6px rgba(46,46,42,.06), 0 18px 50px rgba(46,46,42,.12);
+    --r:16px;
+    --r-sm:11px;
+    --mono:ui-monospace,"SF Mono",SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"PingFang SC","Helvetica Neue","Segoe UI",Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{margin:0;padding:0}
+  body{
+    font-family:var(--sans);
+    background:var(--bg);
+    color:var(--ink);
+    line-height:1.55;
+    font-size:15px;
+    -webkit-font-smoothing:antialiased;
+    padding-bottom:120px;
+    padding-top:env(safe-area-inset-top);
+  }
+  .wrap{max-width:680px;margin:0 auto;padding:0 18px}
+
+  /* ---- top bar ---- */
+  header{
+    position:sticky;top:0;z-index:20;
+    background:rgba(246,244,238,.86);
+    backdrop-filter:saturate(160%) blur(14px);
+    -webkit-backdrop-filter:saturate(160%) blur(14px);
+    border-bottom:1px solid var(--line-soft);
+  }
+  .topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 18px;max-width:680px;margin:0 auto}
+  .brand{display:flex;align-items:center;gap:9px;font-weight:600;letter-spacing:.3px}
+  .brand .mark{width:22px;height:22px;border-radius:7px;background:var(--sage);display:grid;place-items:center}
+  .brand .mark svg{width:14px;height:14px}
+  .brand .sub{font-weight:400;color:var(--ink-soft);font-size:12px;margin-left:2px}
+  .brand .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--ink-faint);margin-left:4px;display:inline-block;vertical-align:middle}
+  .brand .sync-dot.on{background:var(--sage)}
+  .brand .sync-dot.busy{background:var(--amber);animation:pulse 1s infinite}
+  .brand .sync-dot.err{background:var(--clay)}
+  @keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+  .topbar .tools{display:flex;gap:6px}
+  .icon-btn{
+    width:34px;height:34px;border-radius:10px;border:1px solid var(--line);
+    background:var(--surface);display:grid;place-items:center;color:var(--ink-soft);
+    cursor:pointer;transition:.15s
+  }
+  .icon-btn:active{transform:scale(.94);background:var(--bg-soft)}
+
+  /* ---- tabs ---- */
+  .tabs{display:flex;gap:4px;padding:10px 18px 0;max-width:680px;margin:0 auto}
+  .tab{
+    flex:1;text-align:center;padding:11px 8px 13px;font-size:13.5px;font-weight:500;
+    color:var(--ink-faint);border-bottom:2px solid transparent;cursor:pointer;transition:.18s
+  }
+  .tab.active{color:var(--sage-deep);border-bottom-color:var(--sage)}
+  .tab .dot{display:inline-block;width:5px;height:5px;border-radius:50%;background:var(--clay);margin-left:5px;vertical-align:middle;opacity:.7}
+
+  /* ---- views ---- */
+  .view{display:none;animation:fade .3s ease}
+  .view.active{display:block}
+  @keyframes fade{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
+
+  .section-title{font-size:12px;color:var(--ink-faint);letter-spacing:1.5px;text-transform:uppercase;margin:22px 4px 10px;font-weight:600}
+  .hint{font-size:12.5px;color:var(--ink-faint);margin:6px 4px 14px;line-height:1.6}
+
+  /* ---- cards ---- */
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:var(--r);box-shadow:var(--shadow)}
+
+  /* ---- CTDP timers ---- */
+  .timer-card{padding:22px 20px;text-align:center}
+  .timer-label{font-size:12px;color:var(--ink-faint);letter-spacing:1px;margin-bottom:6px}
+  .timer-display{font-family:var(--mono);font-size:54px;font-weight:600;letter-spacing:-1px;color:var(--ink);line-height:1;margin:4px 0 6px}
+  .timer-display.danger{color:var(--clay)}
+  .timer-sub{font-size:12.5px;color:var(--ink-soft);min-height:18px}
+  .ring-wrap{position:relative;width:188px;height:188px;margin:6px auto 14px}
+  .ring-wrap svg{transform:rotate(-90deg)}
+  .ring-bg{fill:none;stroke:var(--line);stroke-width:9}
+  .ring-fg{fill:none;stroke:var(--sage);stroke-width:9;stroke-linecap:round;transition:stroke-dashoffset .5s linear,stroke .3s}
+  .ring-fg.aux{stroke:var(--amber)}
+  .ring-fg.danger{stroke:var(--clay)}
+  .ring-center{position:absolute;inset:0;display:grid;place-items:center;text-align:center}
+  .ring-center .big{font-family:var(--mono);font-size:30px;font-weight:600;letter-spacing:-.5px}
+  .ring-center .sm{font-size:11px;color:var(--ink-faint);letter-spacing:1px;margin-top:2px}
+
+  .chain-row{display:flex;gap:10px;margin-top:16px}
+  .chain-box{flex:1;background:var(--bg-soft);border-radius:var(--r-sm);padding:13px 12px;text-align:center}
+  .chain-box .n{font-family:var(--mono);font-size:26px;font-weight:600;color:var(--sage-deep)}
+  .chain-box .l{font-size:11px;color:var(--ink-faint);margin-top:2px;letter-spacing:.5px}
+
+  .btn-row{display:flex;gap:9px;margin-top:16px}
+  .btn{
+    flex:1;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:var(--surface);
+    font-size:14px;font-weight:500;color:var(--ink);cursor:pointer;transition:.15s;font-family:var(--sans)
+  }
+  .btn:active{transform:scale(.97)}
+  .btn.primary{background:var(--sage);color:#fff;border-color:var(--sage)}
+  .btn.primary:active{background:var(--sage-deep)}
+  .btn.danger{color:var(--clay);border-color:var(--clay-soft);background:var(--clay-soft)}
+  .btn.ghost{background:transparent}
+  .btn:disabled{opacity:.45;cursor:not-allowed}
+
+  /* ---- tree ---- */
+  .tree{list-style:none;margin:0;padding:0}
+  .tree ul{list-style:none;margin:0;padding-left:26px;position:relative}
+  .tree ul::before{
+    content:"";position:absolute;left:11px;top:-4px;bottom:14px;width:1.5px;background:var(--line)
+  }
+  .tree li{position:relative;padding:7px 0}
+  .tree ul > li::before{
+    content:"";position:absolute;left:-15px;top:18px;width:14px;height:1.5px;background:var(--line)
+  }
+  .tree li > .node{position:relative}
+  .node-card{
+    background:var(--surface);border:1px solid var(--line);border-radius:13px;
+    padding:13px 14px;box-shadow:var(--shadow);transition:.18s
+  }
+  .node-card.failed{opacity:.5;background:var(--bg-soft)}
+  .node-card .top{display:flex;align-items:flex-start;gap:9px}
+  .node-card .idx{
+    flex:none;width:26px;height:26px;border-radius:8px;background:var(--sage-soft);color:var(--sage-deep);
+    display:grid;place-items:center;font-family:var(--mono);font-size:12px;font-weight:600
+  }
+  .node-card .body{flex:1;min-width:0}
+  .node-card .content{font-weight:500;font-size:14.5px;line-height:1.45;word-break:break-word}
+  .node-card .meta{font-size:11.5px;color:var(--ink-faint);margin-top:3px;line-height:1.5}
+  .node-card .meta b{color:var(--ink-soft);font-weight:500}
+  .node-card .actions{display:flex;gap:6px;margin-top:11px;flex-wrap:wrap}
+  .mini{
+    padding:6px 11px;border-radius:8px;border:1px solid var(--line);background:var(--surface);
+    font-size:12px;color:var(--ink-soft);cursor:pointer;font-family:var(--sans);transition:.15s
+  }
+  .mini:active{transform:scale(.95)}
+  .mini.ok{color:var(--sage-deep);border-color:var(--sage-soft);background:var(--sage-soft)}
+  .mini.done{background:var(--sage);color:#fff;border-color:var(--sage)}
+  .mini.bad{color:var(--clay);border-color:var(--clay-soft);background:var(--clay-soft)}
+  .mini.ai{color:var(--sage-deep);border-color:var(--sage-soft);background:var(--surface)}
+  .cost{
+    flex:none;align-self:flex-start;font-size:11px;color:var(--ink-faint);background:var(--bg-soft);
+    padding:3px 8px;border-radius:20px;font-family:var(--mono);white-space:nowrap
+  }
+  .cost b{color:var(--clay);font-weight:600}
+  .toggle-kids{
+    position:absolute;left:-31px;top:14px;width:22px;height:22px;border-radius:50%;
+    background:var(--surface);border:1px solid var(--line);color:var(--ink-faint);
+    display:grid;place-items:center;font-size:11px;cursor:pointer;z-index:2
+  }
+  li.collapsed > ul{display:none}
+
+  /* ---- empty ---- */
+  .empty{text-align:center;padding:50px 20px;color:var(--ink-faint)}
+  .empty .ic{font-size:34px;margin-bottom:10px;opacity:.6}
+  .empty p{font-size:13.5px;line-height:1.7;margin:0 auto;max-width:280px}
+  .empty .b{margin-top:18px}
+
+  /* ---- fab ---- */
+  .fab{
+    position:fixed;right:20px;bottom:34px;z-index:30;
+    padding:14px 20px;border-radius:30px;background:var(--sage);color:#fff;border:none;
+    font-size:14px;font-weight:600;cursor:pointer;box-shadow:0 8px 24px rgba(91,138,114,.4);
+    transition:.15s;font-family:var(--sans);display:flex;align-items:center;gap:7px
+  }
+  .fab:active{transform:scale(.95)}
+  .fab:disabled{background:var(--ink-faint);box-shadow:none}
+
+  /* ---- sheet (modal) ---- */
+  .scrim{position:fixed;inset:0;background:rgba(46,46,42,.4);z-index:40;opacity:0;pointer-events:none;transition:.2s}
+  .scrim.show{opacity:1;pointer-events:auto}
+  .sheet{
+    position:fixed;left:0;right:0;bottom:0;z-index:50;background:var(--bg);
+    border-radius:22px 22px 0 0;padding:8px 20px calc(28px + env(safe-area-inset-bottom));
+    transform:translateY(100%);transition:.28s cubic-bezier(.2,.7,.2,1);max-height:88vh;overflow-y:auto
+  }
+  .sheet.show{transform:none}
+  .sheet .grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 16px}
+  .sheet h3{margin:0 0 4px;font-size:17px;font-weight:600}
+  .sheet .desc{font-size:12.5px;color:var(--ink-faint);margin:0 0 16px;line-height:1.6}
+  .field{margin-bottom:13px}
+  .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:500;letter-spacing:.3px}
+  .field label .opt{color:var(--ink-faint);font-weight:400}
+  .field input,.field textarea,.field select{
+    width:100%;padding:11px 13px;border-radius:11px;border:1px solid var(--line);
+    background:var(--surface);font-size:14px;font-family:var(--sans);color:var(--ink);resize:vertical
+  }
+  .field input:focus,.field textarea:focus,.field select:focus{outline:none;border-color:var(--sage);box-shadow:0 0 0 3px var(--sage-soft)}
+  .field .with-ai{position:relative}
+  .field .ai-tag{
+    position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;
+    background:var(--sage-soft);color:var(--sage-deep);padding:4px 9px;border-radius:7px;cursor:pointer;border:none;font-family:var(--sans)
+  }
+  .ai-panel{margin:10px 0;padding:12px;background:var(--sage-soft);border-radius:12px;font-size:13px;display:none}
+  .ai-panel.show{display:block}
+  .ai-panel .ttl{font-size:11px;color:var(--sage-deep);letter-spacing:1px;margin-bottom:8px;font-weight:600}
+  .ai-chip{display:inline-block;padding:7px 12px;margin:4px 4px 0 0;border-radius:9px;background:var(--surface);border:1px solid var(--sage-soft);font-size:13px;cursor:pointer;transition:.15s}
+  .ai-chip:active{transform:scale(.95);background:var(--sage)}
+  .ai-loading{font-size:12px;color:var(--ink-soft);padding:4px 0}
+
+  /* ---- toast ---- */
+  .toast{
+    position:fixed;left:50%;bottom:46px;transform:translateX(-50%) translateY(20px);
+    background:var(--ink);color:#fff;padding:11px 18px;border-radius:30px;font-size:13px;
+    z-index:60;opacity:0;pointer-events:none;transition:.25s;max-width:84vw;text-align:center
+  }
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.warn{background:var(--clay)}
+
+  /* ---- check-in list ---- */
+  .check-item{display:flex;align-items:center;gap:11px;padding:12px 14px;border-bottom:1px solid var(--line-soft)}
+  .check-item:last-child{border-bottom:none}
+  .check-item .ci-body{flex:1;min-width:0}
+  .check-item .ci-content{font-size:13.5px;font-weight:500;word-break:break-word}
+  .check-item .ci-meta{font-size:11px;color:var(--ink-faint);margin-top:2px}
+  .check-item .ci-acts{display:flex;gap:6px;flex:none}
+
+  .stat-row{display:flex;gap:9px;margin:14px 4px 4px}
+  .stat{flex:1;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:12px;text-align:center}
+  .stat .v{font-family:var(--mono);font-size:20px;font-weight:600;color:var(--sage-deep)}
+  .stat .k{font-size:10.5px;color:var(--ink-faint);margin-top:2px;letter-spacing:.5px}
+
+  .leaf-note{font-size:11.5px;color:var(--ink-faint);margin:14px 4px 0;line-height:1.7;padding:12px 14px;background:var(--bg-soft);border-radius:12px;border-left:3px solid var(--sage)}
+  .leaf-note b{color:var(--ink-soft)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="topbar">
+    <div class="brand">
+      <span class="mark"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3 C12 9 8 13 4 15 C9 15 14 12 17 7" stroke="white" stroke-width="2.2" stroke-linecap="round"/><circle cx="4" cy="15" r="2" fill="white"/><circle cx="12" cy="3" r="2" fill="white"/></svg></span>
+      <span>自控台<span class="sub">· 定式与专注</span><span class="sync-dot" id="syncDot"></span></span>
+    </div>
+    <div class="tools">
+      <button class="icon-btn" id="btnSync" title="同步设置">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg>
+      </button>
+      <button class="icon-btn" id="btnImport" title="导入">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+      </button>
+      <button class="icon-btn" id="btnExport" title="导出">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></svg>
+      </button>
+    </div>
+  </div>
+  <div class="tabs">
+    <div class="tab active" data-view="rsip">定式树</div>
+    <div class="tab" data-view="ctdp">专注计时<span class="dot" id="auxDot" style="display:none"></span></div>
+  </div>
+</header>
+
+<!-- ============ RSIP VIEW ============ -->
+<div class="view active" id="view-rsip">
+  <div class="wrap">
+    <div class="stat-row" id="statRow"></div>
+
+    <div class="section-title">今日打卡</div>
+    <div class="card" id="checkList"></div>
+
+    <div class="section-title">定式树</div>
+    <div id="treeContainer"></div>
+
+    <div class="leaf-note">
+      <b>规则</b>　每天最多新增一个定式；某定式失败时，连同其所有子定式一并移除（堆栈结构）。
+      越靠近根部、子节点越多的定式，损失代价越大，也越被保护。胜利属于易胜者。
+    </div>
+  </div>
+  <button class="fab" id="fabAdd">
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+    新增定式
+  </button>
+</div>
+
+<!-- ============ CTDP VIEW ============ -->
+<div class="view" id="view-ctdp">
+  <div class="wrap">
+    <div class="section-title">预约链 · 辅助</div>
+    <div class="card timer-card">
+      <div class="timer-label">响指预约 · 15 分钟内坐上神圣座位</div>
+      <div class="ring-wrap">
+        <svg width="188" height="188" viewBox="0 0 188 188">
+          <circle class="ring-bg" cx="94" cy="94" r="84"/>
+          <circle class="ring-fg aux" id="auxRing" cx="94" cy="94" r="84" stroke-dasharray="527.79" stroke-dashoffset="527.79"/>
+        </svg>
+        <div class="ring-center">
+          <div class="big" id="auxDisplay">15:00</div>
+          <div class="sm" id="auxSub">未启动</div>
+        </div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btnSnap">打响指 · 预约</button>
+        <button class="btn danger" id="btnAuxFail" style="display:none">放弃预约</button>
+      </div>
+    </div>
+
+    <div class="section-title">主链 · 神圣座位</div>
+    <div class="card timer-card">
+      <div class="timer-label">专注一小时 · 以最好的状态</div>
+      <div class="ring-wrap">
+        <svg width="188" height="188" viewBox="0 0 188 188">
+          <circle class="ring-bg" cx="94" cy="94" r="84"/>
+          <circle class="ring-fg" id="focusRing" cx="94" cy="94" r="84" stroke-dasharray="527.79" stroke-dashoffset="527.79"/>
+        </svg>
+        <div class="ring-center">
+          <div class="big" id="focusDisplay">60:00</div>
+          <div class="sm" id="focusSub">未开始</div>
+        </div>
+      </div>
+      <div class="chain-row">
+        <div class="chain-box"><div class="n" id="mainCount">#0</div><div class="l">主链节点</div></div>
+        <div class="chain-box"><div class="n" id="auxCount">0</div><div class="l">预约成功</div></div>
+        <div class="chain-box"><div class="n" id="todayFocus">0</div><div class="l">今日专注</div></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btnStart">坐上座位 · 开始</button>
+        <button class="btn" id="btnFinish" style="display:none">完成 · +1</button>
+        <button class="btn danger" id="btnClear" style="display:none">失败 · 清零</button>
+      </div>
+      <div class="leaf-note" style="margin-top:16px">
+        <b>CTDP</b>　触发预约信号后 15 分钟内必须开始主任务；主任务以最好状态完成一小时，记 #N+1。
+        任意一次失败，主链清零、从 #1 重新开始。中途疑似违规，按"下必为例"处理。
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ============ SHEETS ============ -->
+<div class="scrim" id="scrim"></div>
+
+<div class="sheet" id="addSheet">
+  <div class="grip"></div>
+  <h3>新增定式</h3>
+  <p class="desc">针对一个反复出现的负面状态，回溯到自由意志还能干预的节点，写下你的局部最优解。</p>
+  <div class="field">
+    <label>挂载到</label>
+    <select id="addParent"></select>
+  </div>
+  <div class="field">
+    <label>定式内容 <span class="opt">（你要执行的规则）</span></label>
+    <div class="with-ai">
+      <input type="text" id="addContent" placeholder="例：进家门 15 分钟内必须开始洗澡">
+      <button class="ai-tag" id="aiNameBtn" style="display:none">AI 起名</button>
+    </div>
+  </div>
+  <div class="ai-panel" id="aiNamePanel">
+    <div class="ttl">AI 建议的名字 · 点击采用</div>
+    <div id="aiNameChips"></div>
+  </div>
+  <div class="field">
+    <label>破解的负面状态 <span class="opt">（可选）</span></label>
+    <textarea id="addProblem" rows="2" placeholder="例：回家后躺沙发刷手机，一整晚废掉"></textarea>
+  </div>
+  <div class="field">
+    <label>有效干预节点 <span class="opt">（可选）</span></label>
+    <textarea id="addIntervention" rows="2" placeholder="例：还没把手机带进客厅时，倾向差距尚小"></textarea>
+  </div>
+  <div class="ai-panel" id="aiSuggestPanel">
+    <div class="ttl">AI 建议的子定式 · 点击采用</div>
+    <div id="aiSuggestChips"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn ghost" id="addCancel">取消</button>
+    <button class="btn primary" id="addConfirm">加入定式树</button>
+  </div>
+</div>
+
+<div class="sheet" id="confirmSheet">
+  <div class="grip"></div>
+  <h3 id="confirmTitle">确认</h3>
+  <p class="desc" id="confirmDesc"></p>
+  <div class="btn-row">
+    <button class="btn ghost" id="confirmCancel">取消</button>
+    <button class="btn danger" id="confirmOk">确认</button>
+  </div>
+</div>
+
+<div class="sheet" id="syncSheet">
+  <div class="grip"></div>
+  <h3>云同步设置</h3>
+  <p class="desc">配置 Supabase 后，数据会在所有设备间自动同步。冲突时以最新修改为准。</p>
+  <div class="field">
+    <label>同步状态</label>
+    <div id="syncStatus" style="font-size:13px;color:var(--ink-soft);padding:10px 13px;background:var(--bg-soft);border-radius:11px"></div>
+  </div>
+  <div class="field">
+    <label>Project URL</label>
+    <input type="text" id="syncUrl" placeholder="https://xxxxx.supabase.co">
+  </div>
+  <div class="field">
+    <label>Publishable Key</label>
+    <input type="text" id="syncKey" placeholder="sb_publishable_...">
+  </div>
+  <div class="btn-row">
+    <button class="btn ghost" id="syncClear">断开同步</button>
+    <button class="btn primary" id="syncSave">保存并连接</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+<input type="file" id="fileInput" accept="application/json" style="display:none">
+
+<script>
+/* =========================================================
+   自控台 · RSIP + CTDP
+   单文件 PWA · 数据本地存储 · 可导出导入 JSON
+   ========================================================= */
+
+const STORE_KEY = 'rsip_ctdp_state_v1';
+const FOCUS_MIN = 60;
+const AUX_MIN = 15;
+const RING_C = 2 * Math.PI * 84; // 527.79
+
+let state = load();
+let timer = null;
+
+/* ---------- persistence ---------- */
+function load(){
+  try{
+    const raw = localStorage.getItem(STORE_KEY);
+    if(raw){ return migrate(JSON.parse(raw)); }
+  }catch(e){ console.warn('load fail', e); }
+  return defaultState();
+}
+function defaultState(){
+  return {
+    version:1, created:new Date().toISOString(),
+    tree:{ nodes:[], lastAddedDate:null },
+    ctdp:{ main:{count:0, history:[]}, aux:{count:0}, activeFocus:null, activeAux:null }
+  };
+}
+function migrate(s){
+  if(!s.tree) s.tree = {nodes:[], lastAddedDate:null};
+  if(!s.tree.nodes) s.tree.nodes = [];
+  if(!s.ctdp) s.ctdp = {main:{count:0,history:[]},aux:{count:0},activeFocus:null,activeAux:null};
+  if(!s.ctdp.main) s.ctdp.main = {count:0,history:[]};
+  if(!s.ctdp.main.history) s.ctdp.main.history = [];
+  if(!s.ctdp.aux) s.ctdp.aux = {count:0};
+  return s;
+}
+function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); schedulePush(); }
+
+function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+
+/* ---------- cloud sync (Supabase) ---------- */
+const SYNC_CFG_KEY='rsip_sync_cfg_v1';
+const SYNC_ROW_ID='main';
+let syncCfg = loadSyncCfg();
+// 预置默认配置（用户已提供），如已自定义则保留
+if(!syncCfg.url || !syncCfg.key){
+  const DEFAULT_CFG = {url:'https://mlthrrozzqqumhpqomgn.supabase.co', key:'sb_publishable_JsZWuEa7Mfflji-fZCX3pQ_-VIW_T10'};
+  saveSyncCfg(DEFAULT_CFG);
+}
+let pushTimer=null;
+let lastPushedTs=0;
+let isSyncing=false;
+
+function loadSyncCfg(){
+  try{ return JSON.parse(localStorage.getItem(SYNC_CFG_KEY))||{}; }catch(e){ return {}; }
+}
+function saveSyncCfg(c){ localStorage.setItem(SYNC_CFG_KEY, JSON.stringify(c)); syncCfg=c; }
+
+function setSyncDot(cls){ const d=document.getElementById('syncDot'); if(!d) return; d.className='sync-dot'+(cls?(' '+cls):''); }
+
+async function supabaseCall(path, opts){
+  const url=syncCfg.url.replace(/\/$/,'')+'/rest/v1/'+path;
+  const r=await fetch(url, Object.assign({
+    headers:{
+      'apikey':syncCfg.key,
+      'Authorization':'Bearer '+syncCfg.key,
+      'Content-Type':'application/json',
+      'Prefer':'return=representation'
+    }
+  }, opts));
+  if(!r.ok) throw new Error('HTTP '+r.status);
+  return r.json();
+}
+
+// pull: 拿云端最新，跟本地合并
+async function syncPull(){
+  if(!syncCfg.url||!syncCfg.key) return;
+  isSyncing=true; setSyncDot('busy');
+  try{
+    const rows=await supabaseCall('sync_state?id=eq.'+SYNC_ROW_ID+'&select=*');
+    const row=rows&&rows[0];
+    if(row && row.data && typeof row.data==='object'){
+      const remoteTs=row.updated_at||0;
+      const localTs=state._ts||0;
+      if(remoteTs>localTs){
+        // 云端更新 → 覆盖本地
+        const incoming=row.data;
+        incoming._ts=remoteTs;
+        state=incoming; localStorage.setItem(STORE_KEY, JSON.stringify(state));
+        if(typeof render==='function') render();
+        lastPushedTs=remoteTs;
+      }
+    }
+    setSyncDot('on');
+  }catch(e){ setSyncDot('err'); console.warn('pull fail',e); }
+  isSyncing=false;
+}
+
+// push: 推本地到云端
+async function syncPush(){
+  if(!syncCfg.url||!syncCfg.key) return;
+  if(isSyncing) return;
+  isSyncing=true; setSyncDot('busy');
+  try{
+    state._ts=Date.now();
+    const body=JSON.stringify({ data: state, updated_at: state._ts });
+    await supabaseCall('sync_state?id=eq.'+SYNC_ROW_ID, {
+      method:'PATCH',
+      body
+    });
+    lastPushedTs=state._ts;
+    setSyncDot('on');
+  }catch(e){ setSyncDot('err'); console.warn('push fail',e); }
+  isSyncing=false;
+}
+
+function schedulePush(){
+  if(!syncCfg.url||!syncCfg.key){ setSyncDot(''); return; }
+  clearTimeout(pushTimer);
+  pushTimer=setTimeout(syncPush, 800); // 防抖
+}
+
+async function initSync(){
+  if(syncCfg.url&&syncCfg.key){
+    setSyncDot('busy');
+    await syncPull();
+    // 拉完若本地比云端新（含 _ts），推一次
+    if((state._ts||0)>lastPushedTs){ schedulePush(); }
+  }
+}
+
+function updateSyncStatusUI(){
+  const el=document.getElementById('syncStatus');
+  if(!el) return;
+  if(syncCfg.url&&syncCfg.key){
+    el.innerHTML='已连接 · '+syncCfg.url.replace(/^https?:\/\//,'').split('.')[0]+'<br>数据自动同步，冲突以最新为准';
+  }else{
+    el.innerHTML='未连接 · 仅本地存储。填写下方信息开启多设备同步。';
+  }
+}
+
+/* ---------- tree helpers ---------- */
+const N = () => state.tree.nodes;
+function getChildren(pid){ return N().filter(n=>n.parentId===pid); }
+function subtreeIds(id){
+  const out=[]; const stack=[id];
+  while(stack.length){ const cur=stack.pop(); out.push(cur); getChildren(cur).forEach(c=>stack.push(c.id)); }
+  return out;
+}
+function subtreeSize(id){ return subtreeIds(id).length; }
+function findNode(id){ return N().find(n=>n.id===id); }
+function roots(){ return N().filter(n=>n.parentId===null); }
+
+function uid(){ return 'n'+Date.now().toString(36)+Math.random().toString(36).slice(2,5); }
+
+function canAddToday(){
+  return state.tree.lastAddedDate !== todayStr();
+}
+
+/* ---------- agent detection ---------- */
+// 桌面 Cowork 内置 askClaude；否则只要配了 Supabase 就走云函数中转（手机端也能用 AI）
+function hasCowork(){ return !!(window.cowork && typeof window.cowork.askClaude==='function'); }
+function hasAgent(){ return hasCowork() || !!(syncCfg && syncCfg.url && syncCfg.key); }
+async function askClaude(prompt, data){
+  // 优先桌面 Cowork
+  if(hasCowork()){
+    try{
+      const r = await window.cowork.askClaude(prompt, data);
+      if(typeof r==='string') return r;
+      if(r && r.content && r.content[0] && r.content[0].text) return r.content[0].text;
+      if(r && r.text) return r.text;
+      return JSON.stringify(r);
+    }catch(e){ /* 落到云函数 */ }
+  }
+  // Supabase 云函数中转（火山方舟）
+  if(syncCfg && syncCfg.url && syncCfg.key){
+    try{
+      const base = syncCfg.url.replace(/\/$/,'');
+      const r = await fetch(base+'/functions/v1/ai', {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'apikey':syncCfg.key,
+          'Authorization':'Bearer '+syncCfg.key
+        },
+        body: JSON.stringify({prompt})
+      });
+      const j = await r.json();
+      return (j && j.text) ? j.text : '';
+    }catch(e){ return ''; }
+  }
+  return '';
+}
+
+/* =========================================================
+   RENDER
+   ========================================================= */
+function render(){
+  renderStats();
+  renderCheckList();
+  renderTree();
+  renderCTDP();
+  // fab
+  document.getElementById('fabAdd').disabled = !canAddToday();
+  // agent buttons
+  const showAI = hasAgent();
+  document.getElementById('aiNameBtn').style.display = showAI ? '' : 'none';
+}
+
+function renderStats(){
+  const nodes = N();
+  const active = nodes.filter(n=>n.status==='active');
+  const todayChecks = active.filter(n=>n.log && n.log[todayStr()]==='success').length;
+  const pending = active.filter(n=>!n.log || !n.log[todayStr()]).length;
+  document.getElementById('statRow').innerHTML = `
+    <div class="stat"><div class="v">${active.length}</div><div class="k">生效定式</div></div>
+    <div class="stat"><div class="v">${todayChecks}</div><div class="k">今日已打卡</div></div>
+    <div class="stat"><div class="v">${pending}</div><div class="k">待打卡</div></div>
+  `;
+}
+
+function renderCheckList(){
+  const active = N().filter(n=>n.status==='active');
+  const box = document.getElementById('checkList');
+  if(active.length===0){
+    box.innerHTML = `<div style="padding:26px 18px;text-align:center;color:var(--ink-faint);font-size:13px">还没有生效的定式。先从一件容易做到的小事开始。</div>`;
+    return;
+  }
+  const t = todayStr();
+  box.innerHTML = active.map(n=>{
+    const st = n.log && n.log[t];
+    const days = Object.values(n.log||{}).filter(x=>x==='success').length;
+    return `<div class="check-item">
+      <div class="ci-body">
+        <div class="ci-content">${esc(n.content)}</div>
+        <div class="ci-meta">连续坚持 ${days} 天 · ${st==='success'?'今日已完成':'今日未打卡'}</div>
+      </div>
+      <div class="ci-acts">
+        <button class="mini ${st==='success'?'done':'ok'}" data-check="${n.id}" data-v="success">✓</button>
+        <button class="mini ${st==='fail'?'bad':''}" data-check="${n.id}" data-v="fail">✗</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderTree(){
+  const c = document.getElementById('treeContainer');
+  const r = roots();
+  if(r.length===0){
+    c.innerHTML = `<div class="empty">
+      <div class="ic">🌱</div>
+      <p>你的定式树还是空的。<br>从一件最容易做到、却能避免一整段颓废的小事开始 —— 这就是你的根定式。</p>
+    </div>`;
+    return;
+  }
+  c.innerHTML = `<ul class="tree">${r.map(renderNode).join('')}</ul>`;
+}
+
+function renderNode(n){
+  const kids = getChildren(n.id);
+  const hasKids = kids.length>0;
+  const cost = subtreeSize(n.id);
+  const t = todayStr();
+  const st = n.log && n.log[t];
+  const days = Object.values(n.log||{}).filter(x=>x==='success').length;
+  const idxLabel = n.idx || '';
+  return `<li id="li-${n.id}">
+    <div class="node">
+      ${hasKids?`<button class="toggle-kids" data-toggle="${n.id}">−</button>`:''}
+      <div class="node-card ${n.status==='failed'?'failed':''}">
+        <div class="top">
+          <div class="idx">${idxLabel}</div>
+          <div class="body">
+            <div class="content">${esc(n.content)}</div>
+            <div class="meta">
+              ${n.problem?`<div>破解：<b>${esc(n.problem)}</b></div>`:''}
+              <div>坚持 ${days} 天 · 状态：${st==='success'?'今日✓':st==='fail'?'今日✗':'今日未打卡'} · 加入于 ${n.createdAt.slice(0,10)}</div>
+            </div>
+          </div>
+          <div class="cost">代价 <b>${cost}</b></div>
+        </div>
+        <div class="actions">
+          <button class="mini ${st==='success'?'done':'ok'}" data-check="${n.id}" data-v="success">今日完成</button>
+          <button class="mini ${st==='fail'?'bad':''}" data-check="${n.id}" data-v="fail">今日失败</button>
+          <button class="mini" data-addchild="${n.id}">+ 子定式</button>
+          ${hasAgent()?`<button class="mini ai" data-aisuggest="${n.id}">AI 建议</button>`:''}
+          <button class="mini bad" data-del="${n.id}">删除</button>
+        </div>
+      </div>
+    </div>
+    ${hasKids?`<ul>${kids.map(renderNode).join('')}</ul>`:''}
+  </li>`;
+}
+
+function esc(s){ return (s||'').replace(/[&<>"]/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[m])); }
+
+/* =========================================================
+   CTDP RENDER & TIMERS
+   ========================================================= */
+function renderCTDP(){
+  // counts
+  document.getElementById('mainCount').textContent = '#'+state.ctdp.main.count;
+  document.getElementById('auxCount').textContent = state.ctdp.aux.count;
+  const todayF = (state.ctdp.main.history||[]).filter(h=>h.startsWith(todayStr())).length;
+  document.getElementById('todayFocus').textContent = todayF;
+
+  // aux
+  const aux = state.ctdp.activeAux;
+  const auxRing = document.getElementById('auxRing');
+  const auxD = document.getElementById('auxDisplay');
+  const auxS = document.getElementById('auxSub');
+  if(aux){
+    const remain = Math.max(0, AUX_MIN*60 - (Date.now()-aux.triggeredAt)/1000);
+    const mm = Math.floor(remain/60), ss = Math.floor(remain%60);
+    auxD.textContent = String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    auxD.classList.toggle('danger', remain<60);
+    const frac = remain/(AUX_MIN*60);
+    auxRing.style.strokeDashoffset = RING_C*(1-frac);
+    auxRing.classList.toggle('danger', remain<60);
+    auxS.textContent = remain>0?'倒计时中 · 到时前坐上座位':'已超时';
+    document.getElementById('btnSnap').style.display='none';
+    document.getElementById('btnAuxFail').style.display='';
+    document.getElementById('auxDot').style.display='';
+  }else{
+    auxD.textContent='15:00'; auxD.classList.remove('danger');
+    auxRing.style.strokeDashoffset=RING_C; auxRing.classList.remove('danger');
+    auxS.textContent='未启动';
+    document.getElementById('btnSnap').style.display='';
+    document.getElementById('btnAuxFail').style.display='none';
+    document.getElementById('auxDot').style.display='none';
+  }
+
+  // focus
+  const f = state.ctdp.activeFocus;
+  const fRing = document.getElementById('focusRing');
+  const fD = document.getElementById('focusDisplay');
+  const fS = document.getElementById('focusSub');
+  if(f){
+    const remain = Math.max(0, FOCUS_MIN*60 - (Date.now()-f.startedAt)/1000);
+    const mm=Math.floor(remain/60), ss=Math.floor(remain%60);
+    fD.textContent=String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0');
+    fD.classList.toggle('danger', remain<60);
+    const frac=remain/(FOCUS_MIN*60);
+    fRing.style.strokeDashoffset=RING_C*(1-frac);
+    fRing.classList.toggle('danger', remain<60);
+    fS.textContent = remain>0?'专注中 · 保持最好状态':'已完成';
+    document.getElementById('btnStart').style.display='none';
+    document.getElementById('btnFinish').style.display='';
+    document.getElementById('btnClear').style.display='';
+  }else{
+    fD.textContent='60:00'; fD.classList.remove('danger');
+    fRing.style.strokeDashoffset=RING_C; fRing.classList.remove('danger');
+    fS.textContent='未开始';
+    document.getElementById('btnStart').style.display='';
+    document.getElementById('btnFinish').style.display='none';
+    document.getElementById('btnClear').style.display='none';
+  }
+}
+
+function tick(){
+  // handle timeouts
+  const aux = state.ctdp.activeAux;
+  if(aux && (Date.now()-aux.triggeredAt)/1000 >= AUX_MIN*60){
+    state.ctdp.activeAux = null;
+    state.ctdp.aux.count = 0; // 预约链失败清零
+    save();
+    toast('预约超时 · 预约链清零', true);
+  }
+  const f = state.ctdp.activeFocus;
+  if(f && (Date.now()-f.startedAt)/1000 >= FOCUS_MIN*60){
+    // auto-complete
+    completeFocus();
+  }
+  renderCTDP();
+  renderStats();
+}
+
+function completeFocus(){
+  if(!state.ctdp.activeFocus) return;
+  state.ctdp.main.count += 1;
+  state.ctdp.main.history.push(new Date().toISOString());
+  state.ctdp.activeFocus = null;
+  // aux success if was active
+  if(state.ctdp.activeAux){
+    state.ctdp.aux.count += 1;
+    state.ctdp.activeAux = null;
+  }
+  save();
+  toast('专注完成 · #'+state.ctdp.main.count+' 🎉');
+}
+
+/* =========================================================
+   ACTIONS
+   ========================================================= */
+// tab switch
+document.querySelectorAll('.tab').forEach(t=>{
+  t.addEventListener('click', ()=>{
+    document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+    document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
+    t.classList.add('active');
+    document.getElementById('view-'+t.dataset.view).classList.add('active');
+  });
+});
+
+// check-in
+document.addEventListener('click', e=>{
+  const ck = e.target.closest('[data-check]');
+  if(ck){
+    const id=ck.dataset.check, v=ck.dataset.v;
+    const n=findNode(id); if(!n) return;
+    const t=todayStr();
+    n.log = n.log||{};
+    if(v==='fail'){
+      // 失败 → 触发级联删除确认
+      const cost = subtreeSize(id);
+      confirmAct(
+        '今日失败 · 级联删除',
+        `"${n.content}" 标记为今日失败。按 RSIP 堆栈规则，将连同 ${cost-1} 个子定式一并移除，共损失 ${cost} 个定式。确认？`,
+        ()=>{
+          n.log[t]='fail';
+          // remove subtree
+          const ids = subtreeIds(id);
+          state.tree.nodes = state.tree.nodes.filter(x=>!ids.includes(x.id));
+          save(); render(); toast('已移除 '+ids.length+' 个定式', true);
+        }
+      );
+    }else{
+      n.log[t]='success'; save(); render();
+    }
+  }
+});
+
+// add child
+document.addEventListener('click', e=>{
+  const ac = e.target.closest('[data-addchild]');
+  if(ac){ openAddSheet(ac.dataset.addchild); }
+});
+
+// delete
+document.addEventListener('click', e=>{
+  const d = e.target.closest('[data-del]');
+  if(d){
+    const id=d.dataset.del; const n=findNode(id); if(!n) return;
+    const cost=subtreeSize(id);
+    confirmAct('删除定式','将删除 "${c}" 及其 ${k} 个子定式，共 ${t} 个。'.replace('${c}',n.content).replace('${k}',cost-1).replace('${t}',cost),()=>{
+      const ids=subtreeIds(id);
+      state.tree.nodes = state.tree.nodes.filter(x=>!ids.includes(x.id));
+      save(); render(); toast('已删除 '+ids.length+' 个');
+    });
+  }
+});
+
+// toggle collapse
+document.addEventListener('click', e=>{
+  const tg = e.target.closest('[data-toggle]');
+  if(tg){
+    const li = document.getElementById('li-'+tg.dataset.toggle);
+    li.classList.toggle('collapsed');
+    tg.textContent = li.classList.contains('collapsed')?'+':'−';
+  }
+});
+
+// AI suggest children
+document.addEventListener('click', async e=>{
+  const ai = e.target.closest('[data-aisuggest]');
+  if(!ai) return;
+  if(!hasAgent()){ toast('当前环境不可用', true); return; }
+  const id=ai.dataset.aisuggest; const node=findNode(id); if(!node) return;
+  ai.textContent='思考中…'; ai.disabled=true;
+  const treeBrief = N().map(n=>`${n.id}(父:${n.parentId||'根'}): ${n.content}`).join('\n');
+  const kids = getChildren(id).map(k=>k.content);
+  const prompt = `你在帮助一个用户管理他的"定式树"（基于自控方法 RSIP）。
+定式 = 针对某个反复出现的负面状态，在自由意志还能干预的早期节点设置的局部最优解规则。
+当前定式树：
+${treeBrief}
+
+用户选中的节点是："${node.content}"（它已有子定式：${kids.length?kids.join('、'):'无'}）。
+请基于这个节点的语义，提出 4 个具体的子定式建议。每个不超过 20 字，写成可执行的规则句。只输出建议，每行一条，不要编号不要解释。`;
+  const res = await askClaude(prompt, []);
+  ai.textContent='AI 建议'; ai.disabled=false;
+  showAISuggest(res, id);
+});
+
+function showAISuggest(text, parentId){
+  const panel=document.getElementById('aiSuggestPanel');
+  const chips=document.getElementById('aiSuggestChips');
+  const lines = (text||'').split('\n').map(s=>s.trim().replace(/^[-•\d.、]+\s*/,'')).filter(s=>s.length>0 && s.length<=60).slice(0,6);
+  if(lines.length===0){ toast('AI 未返回可用建议', true); return; }
+  chips.innerHTML = lines.map(l=>`<span class="ai-chip" data-suggest="${esc(parentId)}" data-text="${esc(l)}">${esc(l)}</span>`).join('');
+  panel.classList.add('show');
+  openSheet('addSheet');
+  // prefill parent
+  document.getElementById('addParent').value=parentId;
+}
+
+document.addEventListener('click', e=>{
+  const s = e.target.closest('[data-suggest]');
+  if(s){
+    document.getElementById('addContent').value = s.dataset.text;
+    document.getElementById('aiSuggestPanel').classList.remove('show');
+  }
+});
+
+/* ---------- add sheet ---------- */
+function openAddSheet(parentId){
+  if(!canAddToday()){ toast('今天已经新增过定式了，明天再来', true); return; }
+  // parent select
+  const sel = document.getElementById('addParent');
+  sel.innerHTML = `<option value="">（作为根定式）</option>` + N().map(n=>{
+    const depth = depthOf(n.id);
+    return `<option value="${n.id}">${'　'.repeat(depth)}${esc(n.content)}</option>`;
+  }).join('');
+  sel.value = parentId || '';
+  document.getElementById('addContent').value='';
+  document.getElementById('addProblem').value='';
+  document.getElementById('addIntervention').value='';
+  document.getElementById('aiNamePanel').classList.remove('show');
+  document.getElementById('aiSuggestPanel').classList.remove('show');
+  openSheet('addSheet');
+  setTimeout(()=>document.getElementById('addContent').focus(),300);
+}
+function depthOf(id){ let d=0,n=findNode(id); while(n&&n.parentId){n=findNode(n.parentId);d++;} return d; }
+
+document.getElementById('fabAdd').addEventListener('click', ()=>openAddSheet(''));
+document.getElementById('addCancel').addEventListener('click', closeSheets);
+document.getElementById('addConfirm').addEventListener('click', ()=>{
+  if(!canAddToday()){ toast('今天已经新增过定式了，明天再来', true); return; }
+  const content = document.getElementById('addContent').value.trim();
+  if(!content){ toast('请填写定式内容', true); return; }
+  const parentId = document.getElementById('addParent').value || null;
+  // assign idx like #1, #2 ... per parent? use global sequence
+  const node = {
+    id: uid(), idx: '#'+(N().length+1),
+    content, parentId,
+    problem: document.getElementById('addProblem').value.trim(),
+    intervention: document.getElementById('addIntervention').value.trim(),
+    createdAt: new Date().toISOString(),
+    status:'active', log:{}
+  };
+  N().push(node);
+  state.tree.lastAddedDate = todayStr();
+  save(); render(); closeSheets();
+  toast('已加入定式树');
+});
+
+// AI name
+document.getElementById('aiNameBtn').addEventListener('click', async ()=>{
+  if(!hasAgent()) return;
+  const content=document.getElementById('addContent').value.trim();
+  const problem=document.getElementById('addProblem').value.trim();
+  if(!content && !problem){ toast('先写点内容再起名', true); return; }
+  const btn=document.getElementById('aiNameBtn'); btn.textContent='…'; btn.disabled=true;
+  const prompt=`给下面这条自控"定式"起 4 个简洁有力的名字，每个不超过 8 个字，像棋局定式或国策名。只输出名字，每行一个。
+内容：${content}
+针对问题：${problem||'（未填）'}`;
+  const res = await askClaude(prompt, []);
+  btn.textContent='AI 起名'; btn.disabled=false;
+  const lines=(res||'').split('\n').map(s=>s.trim()).filter(s=>s&&s.length<=12).slice(0,4);
+  if(!lines.length){ toast('未生成名字', true); return; }
+  document.getElementById('aiNameChips').innerHTML = lines.map(l=>`<span class="ai-chip" data-name="${esc(l)}">${esc(l)}</span>`).join('');
+  document.getElementById('aiNamePanel').classList.add('show');
+});
+document.addEventListener('click', e=>{
+  const n=e.target.closest('[data-name]');
+  if(n){
+    document.getElementById('addContent').value = n.dataset.name;
+    document.getElementById('aiNamePanel').classList.remove('show');
+  }
+});
+
+/* ---------- confirm sheet ---------- */
+let confirmCb = null;
+function confirmAct(title, desc, cb){
+  document.getElementById('confirmTitle').textContent=title;
+  document.getElementById('confirmDesc').textContent=desc;
+  confirmCb=cb;
+  openSheet('confirmSheet');
+}
+document.getElementById('confirmCancel').addEventListener('click', closeSheets);
+document.getElementById('confirmOk').addEventListener('click', ()=>{ const f=confirmCb; confirmCb=null; closeSheets(); if(f) f(); });
+
+/* ---------- sheets ---------- */
+function openSheet(id){ document.getElementById('scrim').classList.add('show'); document.getElementById(id).classList.add('show'); }
+function closeSheets(){ document.getElementById('scrim').classList.remove('show'); document.querySelectorAll('.sheet').forEach(s=>s.classList.remove('show')); }
+document.getElementById('scrim').addEventListener('click', closeSheets);
+
+/* ---------- toast ---------- */
+let toastT=null;
+function toast(msg, warn){ const t=document.getElementById('toast'); t.textContent=msg; t.classList.toggle('warn',!!warn); t.classList.add('show'); clearTimeout(toastT); toastT=setTimeout(()=>t.classList.remove('show'),2400); }
+
+/* ---------- CTDP buttons ---------- */
+document.getElementById('btnSnap').addEventListener('click', ()=>{
+  if(state.ctdp.activeAux) return;
+  state.ctdp.activeAux = { triggeredAt: Date.now() };
+  save(); renderCTDP(); toast('已预约 · 15 分钟内坐上座位');
+});
+document.getElementById('btnAuxFail').addEventListener('click', ()=>{
+  confirmAct('放弃预约','预约链将清零。确认放弃本次预约？',()=>{
+    state.ctdp.activeAux=null; state.ctdp.aux.count=0; save(); render();
+  });
+});
+document.getElementById('btnStart').addEventListener('click', ()=>{
+  state.ctdp.activeFocus = { startedAt: Date.now() };
+  save(); renderCTDP(); toast('专注开始 · 保持最好状态');
+});
+document.getElementById('btnFinish').addEventListener('click', completeFocus);
+document.getElementById('btnClear').addEventListener('click', ()=>{
+  confirmAct('主链清零','本次专注判为失败，主链节点数清零、从 #1 重新开始。确认？',()=>{
+    state.ctdp.activeFocus=null; state.ctdp.main.count=0;
+    if(state.ctdp.activeAux){ state.ctdp.activeAux=null; state.ctdp.aux.count=0; }
+    save(); render(); toast('主链已清零', true);
+  });
+});
+
+/* ---------- export / import ---------- */
+document.getElementById('btnExport').addEventListener('click', ()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download='rsip-ctdp-'+todayStr()+'.json'; a.click();
+  URL.revokeObjectURL(url);
+  toast('已导出 JSON');
+});
+document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('fileInput').click());
+document.getElementById('btnSync').addEventListener('click', ()=>{
+  document.getElementById('syncUrl').value=syncCfg.url||'';
+  document.getElementById('syncKey').value=syncCfg.key||'';
+  updateSyncStatusUI();
+  openSheet('syncSheet');
+});
+document.getElementById('syncSave').addEventListener('click', async ()=>{
+  const url=document.getElementById('syncUrl').value.trim();
+  const key=document.getElementById('syncKey').value.trim();
+  if(!url||!key){ toast('请填写完整', true); return; }
+  saveSyncCfg({url,key});
+  toast('连接中…');
+  closeSheets();
+  await initSync();
+  if((state._ts||0)<=lastPushedTs) schedulePush();
+  toast(syncCfg.url?'同步已开启':'同步失败', !syncCfg.url);
+});
+document.getElementById('syncClear').addEventListener('click', ()=>{
+  saveSyncCfg({});
+  setSyncDot('');
+  toast('已断开同步 · 数据仍保留在本地');
+  closeSheets();
+});
+document.getElementById('fileInput').addEventListener('change', e=>{
+  const f=e.target.files[0]; if(!f) return;
+  const r=new FileReader();
+  r.onload=()=>{
+    try{
+      const data=JSON.parse(r.result);
+      if(!data.tree || !data.ctdp) throw 0;
+      state=migrate(data); state._ts=Date.now(); save(); render(); toast('已导入');
+    }catch(err){ toast('导入失败 · 文件格式不对', true); }
+  };
+  r.readAsText(f);
+  e.target.value='';
+});
+
+/* ---------- boot ---------- */
+render();
+timer = setInterval(tick, 500);
+initSync();
+// re-render on resume
+document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render(); syncPull(); } });
+</script>
+</body>
+</html>
