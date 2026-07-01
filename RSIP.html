@@ -511,15 +511,21 @@ function migrate(s){
 }
 function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); schedulePush(); }
 
-function todayStr(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
-function dateStrOffset(days){ const d=new Date(); d.setDate(d.getDate()+days); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+// 逻辑日边界：沿用 HARNESS 的日本 30 小时制，一天从早上 6:00 开始（0:00-5:59 仍算前一天）
+const DAY_START_HOUR = 6;
+function dayStrOf(date){
+  const d = new Date(date.getTime() - DAY_START_HOUR*3600*1000);
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+}
+function todayStr(){ return dayStrOf(new Date()); }
+function dateStrOffset(days){ const d=new Date(); d.setDate(d.getDate()+days); return dayStrOf(d); }
 function yesterdayStr(){ return dateStrOffset(-1); }
 // 某定式本次要打卡/回顾的目标日期：次日回顾看昨天，当天确认看今天
 function checkDateFor(n){ return (n && n.checkMode==='nextday') ? yesterdayStr() : todayStr(); }
 // 次日回顾的节点若今天才创建（昨天尚不存在），暂不可回顾
 function checkReady(n){
   if(n && n.checkMode==='nextday'){
-    const created = (n.createdAt||'').slice(0,10);
+    const created = n.createdAt ? dayStrOf(new Date(n.createdAt)) : '';
     return created !== todayStr(); // 今天创建的 nextday 节点，明天起才可回顾
   }
   return true;
@@ -812,7 +818,7 @@ function renderCTDP(){
   // counts
   document.getElementById('mainCount').textContent = '#'+state.ctdp.main.count;
   document.getElementById('auxCount').textContent = state.ctdp.aux.count;
-  const todayF = (state.ctdp.main.history||[]).filter(h=>h.startsWith(todayStr())).length;
+  const todayF = (state.ctdp.main.history||[]).filter(h=>dayStrOf(new Date(h))===todayStr()).length;
   document.getElementById('todayFocus').textContent = todayF;
 
   // aux
