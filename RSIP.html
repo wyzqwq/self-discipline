@@ -227,6 +227,7 @@
   .mode-tabs{display:flex;gap:6px;background:var(--bg-soft);padding:4px;border-radius:12px;margin-bottom:14px}
   .mode-tabs .tab{flex:1;text-align:center;padding:9px 6px;border-radius:9px;font-size:13px;color:var(--ink-soft);cursor:pointer;border:none;background:transparent;font-family:var(--sans);transition:.15s}
   .mode-tabs .tab.active{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .locked{opacity:.4;pointer-events:none;filter:grayscale(.4)}
   .diag-card{padding:12px 13px;margin-bottom:9px;border-radius:12px;background:var(--surface);border:1px solid var(--sage-soft);cursor:pointer;transition:.15s}
   .diag-card:active{transform:scale(.98)}
   .diag-card.picked{border-color:var(--sage);background:var(--sage-soft)}
@@ -368,8 +369,8 @@
 
 <div class="sheet" id="addSheet">
   <div class="grip"></div>
-  <h3>新增定式</h3>
-  <p class="desc">针对一个反复出现的负面状态，回溯到自由意志还能干预的节点，写下你的局部最优解。</p>
+  <h3 id="addTitle">新增定式</h3>
+  <p class="desc" id="addDesc">针对一个反复出现的负面状态，回溯到自由意志还能干预的节点，写下你的局部最优解。</p>
   <div class="mode-tabs" id="addTabs">
     <button class="tab active" data-mode="manual">手动挂载</button>
     <button class="tab" data-mode="diag">AI 诊断</button>
@@ -414,7 +415,7 @@
     </div>
     <div class="opt" id="checkModeHint" style="font-size:11px;margin-top:6px;line-height:1.5">当天就能判断是否做到（如"进门先洗澡"）。</div>
   </div>
-  <div class="field">
+  <div class="field" id="nameField">
     <label>定式名字 <span class="opt">（可选 · 内容确定后再起名）</span></label>
     <div class="with-ai">
       <input type="text" id="addName" placeholder="例：进门即净">
@@ -818,7 +819,7 @@ function renderNode(n){
         </div>
         <div class="actions">${checkBtns}
           <button class="mini" data-addchild="${n.id}">+ 子定式</button>
-          ${hasAgent()?`<button class="mini ai" data-aisuggest="${n.id}">AI 建议</button>`:''}
+          <button class="mini" data-rename="${n.id}">重命名</button>
           <button class="mini bad" data-del="${n.id}">删除</button>
         </div>
       </div>
@@ -973,6 +974,12 @@ document.addEventListener('click', e=>{
   if(ac){ openAddSheet(ac.dataset.addchild); }
 });
 
+// rename
+document.addEventListener('click', e=>{
+  const rn = e.target.closest('[data-rename]');
+  if(rn){ openRenameSheet(rn.dataset.rename); }
+});
+
 // delete
 document.addEventListener('click', e=>{
   const d = e.target.closest('[data-del]');
@@ -998,39 +1005,6 @@ document.addEventListener('click', e=>{
     tg.textContent = li.classList.contains('collapsed')?'+':'−';
   }
 });
-
-// AI suggest children
-document.addEventListener('click', async e=>{
-  const ai = e.target.closest('[data-aisuggest]');
-  if(!ai) return;
-  if(!hasAgent()){ toast('当前环境不可用', true); return; }
-  const id=ai.dataset.aisuggest; const node=findNode(id); if(!node) return;
-  ai.textContent='思考中…'; ai.disabled=true;
-  const treeBrief = N().map(n=>`${n.id}(父:${n.parentId||'根'}): ${n.content}`).join('\n');
-  const kids = getChildren(id).map(k=>k.content);
-  const prompt = `你在帮助一个用户管理他的"定式树"（基于自控方法 RSIP）。
-定式 = 针对某个反复出现的负面状态，在自由意志还能干预的早期节点设置的局部最优解规则。
-当前定式树：
-${treeBrief}
-
-用户选中的节点是："${node.content}"（它已有子定式：${kids.length?kids.join('、'):'无'}）。
-请基于这个节点的语义，提出 4 个具体的子定式建议。每个不超过 20 字，写成可执行的规则句。只输出建议，每行一条，不要编号不要解释。`;
-  const res = await askClaude(prompt, []);
-  ai.textContent='AI 建议'; ai.disabled=false;
-  showAISuggest(res, id);
-});
-
-function showAISuggest(text, parentId){
-  const panel=document.getElementById('aiSuggestPanel');
-  const chips=document.getElementById('aiSuggestChips');
-  const lines = (text||'').split('\n').map(s=>s.trim().replace(/^[-•\d.、]+\s*/,'')).filter(s=>s.length>0 && s.length<=60).slice(0,6);
-  if(lines.length===0){ toast('AI 未返回可用建议', true); return; }
-  chips.innerHTML = lines.map(l=>`<span class="ai-chip" data-content="${esc(l)}">${esc(l)}</span>`).join('');
-  panel.classList.add('show');
-  openSheet('addSheet');
-  // prefill parent
-  document.getElementById('addParent').value=parentId;
-}
 
 /* ---------- add sheet ---------- */
 function setAddMode(mode){
@@ -1060,6 +1034,12 @@ function openAddSheet(parentId){
   }else if(!canAddToday()){
     toast('今天已经新增过定式了，明天再来', true); return;
   }
+  // 退出重命名模式：还原标题/描述/按钮、解锁全表单
+  renameId = null;
+  setRenameLock(false);
+  document.getElementById('addTitle').textContent = '新增定式';
+  document.getElementById('addDesc').textContent = '针对一个反复出现的负面状态，回溯到自由意志还能干预的节点，写下你的局部最优解。';
+  document.getElementById('addConfirm').textContent = '加入定式树';
   buildParentOptions();
   const sel = document.getElementById('addParent');
   sel.value = parentId || (canAddRoot() ? '' : (N()[0] ? N()[0].id : ''));
@@ -1080,6 +1060,60 @@ function openAddSheet(parentId){
 }
 function depthOf(id){ let d=0,n=findNode(id); while(n&&n.parentId){n=findNode(n.parentId);d++;} return d; }
 
+// 取某节点(含自身)向上的祖先链，从近到远：[自身/父, 祖父, ...根]
+function ancestorsFromNear(startId){
+  const arr=[]; let n=findNode(startId);
+  while(n){ arr.push(n); n=findNode(n.parentId); }
+  return arr;
+}
+// 生成"带指数递减权重"的祖先脉络文字。距离越近权重越大：w = DECAY^d（父 d=0），再归一化成百分比。
+const ANCESTOR_DECAY = 0.5;
+function weightedAncestorText(parentId){
+  const chain = ancestorsFromNear(parentId);          // 从近(父)到远(根)
+  if(!chain.length) return '';
+  const raw = chain.map((_,d)=>Math.pow(ANCESTOR_DECAY, d));
+  const sum = raw.reduce((a,b)=>a+b,0);
+  const lines = chain.map((n,i)=>{
+    const label = i===0 ? '父定式' : (i===chain.length-1 && !n.parentId ? '根定式' : `第${i+1}级祖先`);
+    const pct = Math.round(raw[i]/sum*100);
+    const txt = n.name ? `${n.name}（${n.content}）` : n.content;
+    return `- [${label} · 权重~${pct}%] ${txt}`;
+  });
+  return `这条新定式所在的上级脉络（从近到远，每层标注了参考权重，权重呈指数递减）：\n${lines.join('\n')}\n请严格按上面标注的权重比例综合参考各级祖先：权重高的层影响更大，但权重低的上层也必须体现、不可忽略——最终建议应同时贴合直接父定式并与整条脉络的主题方向一致，按权重配比而非只看最高的一层。`;
+}
+
+// 重命名模式：白名单——只放开"定式名字"，其余 addSheet 内容一律锁灰。
+// 以后表单新增栏目默认也是锁住的（不在白名单里就锁）。
+let renameId = null;
+const RENAME_UNLOCK = ['addTitle','addDesc','nameField','aiNamePanel'];  // 另加 .grip / .btn-row 见下
+function setRenameLock(on){
+  const sheet = document.getElementById('addSheet');
+  Array.from(sheet.children).forEach(el=>{
+    const keep = el.classList.contains('grip') || el.classList.contains('btn-row') || RENAME_UNLOCK.includes(el.id);
+    el.classList.toggle('locked', on && !keep);
+  });
+}
+function openRenameSheet(id){
+  const n = findNode(id); if(!n) return;
+  renameId = id;
+  buildParentOptions();
+  setAddMode('manual');
+  setCheckMode(n.checkMode || 'sameday');
+  document.getElementById('addParent').value = n.parentId || '';
+  document.getElementById('addContent').value = n.content || '';
+  document.getElementById('addName').value = n.name || '';
+  document.getElementById('aiNamePanel').classList.remove('show');
+  document.getElementById('aiSuggestPanel').classList.remove('show');
+  document.getElementById('diagPanel').classList.remove('show');
+  document.getElementById('addTitle').textContent = '重命名定式';
+  document.getElementById('addDesc').textContent = '只修改定式名字，其它内容此处不可改。';
+  document.getElementById('addConfirm').textContent = '保存名字';
+  document.getElementById('aiNameBtn').style.display = hasAgent() ? '' : 'none';
+  setRenameLock(true);
+  openSheet('addSheet');
+  setTimeout(()=>{ const el=document.getElementById('addName'); el.focus(); el.select(); },300);
+}
+
 // tab 切换
 document.getElementById('addTabs').addEventListener('click', e=>{
   const t=e.target.closest('.tab'); if(t) setAddMode(t.dataset.mode);
@@ -1092,6 +1126,15 @@ document.getElementById('checkModeTabs').addEventListener('click', e=>{
 document.getElementById('fabAdd').addEventListener('click', ()=>openAddSheet(''));
 document.getElementById('addCancel').addEventListener('click', closeSheets);
 document.getElementById('addConfirm').addEventListener('click', ()=>{
+  // 重命名模式：只改名字，不动其它
+  if(renameId){
+    const n = findNode(renameId);
+    if(!n){ renameId=null; closeSheets(); return; }
+    n.name = document.getElementById('addName').value.trim();
+    save(); render(); closeSheets();
+    toast('已更新名字');
+    return;
+  }
   const content = document.getElementById('addContent').value.trim();
   if(!content){ toast('请填写定式内容', true); return; }
   const parentId = document.getElementById('addParent').value || null;
@@ -1127,13 +1170,13 @@ document.getElementById('aiContentBtn').addEventListener('click', async ()=>{
   if(parent){
     const kids = getChildren(parentId).map(k=>k.content);
     prompt = `你在帮用户管理"定式树"（自控方法 RSIP）。定式=针对反复出现的负面状态，在自由意志还能干预的早期节点设的局部最优解规则。
-当前挂载的父定式是："${parent.content}"（已有子定式：${kids.length?kids.join('、'):'无'}）。
-请基于这个父定式，提出 4 个更具体的子定式内容建议。每个不超过 20 字，写成可执行的规则句。只输出内容，每行一条，不要编号不要解释。`;
+${weightedAncestorText(parentId)}
+父定式已有的子定式：${kids.length?kids.join('、'):'无'}。
+请提出 4 个更具体的子定式内容建议。每个不超过 20 字，写成可执行的规则句。只输出内容，每行一条，不要编号不要解释。`;
   }else{
     prompt = `你在帮用户管理"定式树"（自控方法 RSIP）。定式=针对反复出现的负面状态，在自由意志还能干预的早期节点设的局部最优解规则。
-用户要新增一条根定式。当前已有的定式：
-${treeBrief}
-请提出 4 个适合作为根定式的内容建议（针对常见的、影响一整段时间的负面状态，从最容易做到的小事切入）。每个不超过 20 字，写成可执行的规则句。只输出内容，每行一条，不要编号不要解释。`;
+用户要新增一条"根定式"。整棵定式树只有一个根定式，它不是某条具体的自控规则，而是统领整棵树的总体纲领 / 治理原则——用来规定"这棵定式树整体该如何被建立、执行、复盘、迭代"，所有子定式都是在它的框架下展开的。${treeBrief==='（暂无定式）'?'':`\n当前树里已有的定式（供你理解用户在治理的主题）：\n${treeBrief}`}
+请提出 4 个适合作为这样一条总纲的根定式建议。要写成对整棵树的治理/元规则（例如关于复盘、失败处理、迭代节奏、优先级的总原则），而不是针对某个具体负面状态的单条规则。每个不超过 20 字，写成可执行的原则句。只输出内容，每行一条，不要编号不要解释。`;
   }
   const res = await askClaude(prompt, []);
   btn.textContent='AI 建议内容'; btn.disabled=false;
@@ -1152,14 +1195,18 @@ document.addEventListener('click', e=>{
   }
 });
 
-// AI 起名（基于已写好的内容 → 填进名字框）
+// AI 起名（基于已写好的内容 + 挂载祖先链 → 填进名字框）
 document.getElementById('aiNameBtn').addEventListener('click', async ()=>{
   if(!hasAgent()) return;
   const content=document.getElementById('addContent').value.trim();
   if(!content){ toast('先写好定式内容再起名', true); return; }
   const btn=document.getElementById('aiNameBtn'); btn.textContent='…'; btn.disabled=true;
+  // 从当前挂载父节点回溯到根，拼出祖先链（新增/重命名都复用 addParent 的值）
+  const chain=[]; let p=findNode(document.getElementById('addParent').value);
+  while(p){ chain.unshift(p.name?`${p.name}（${p.content}）`:p.content); p=findNode(p.parentId); }
+  const ctx = chain.length ? `\n这条定式在定式树中的上级脉络（根→父）：${chain.join(' → ')}\n起名时可呼应这条脉络的主题，使其成体系。` : '';
   const prompt=`给下面这条自控"定式"起 4 个简洁有力的名字，每个不超过 8 个字，像棋局定式或国策名。只输出名字，每行一个，不要编号不要解释。
-内容：${content}`;
+内容：${content}${ctx}`;
   const res = await askClaude(prompt, []);
   btn.textContent='AI 起名'; btn.disabled=false;
   const lines=(res||'').split('\n').map(s=>s.trim().replace(/^[-•\d.、]+\s*/,'')).filter(s=>s&&s.length<=12).slice(0,4);
