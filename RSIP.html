@@ -473,6 +473,8 @@
    ========================================================= */
 
 const STORE_KEY = 'rsip_ctdp_state_v1';
+// 逻辑日边界：沿用 HARNESS 日本30小时制，一天从早上6:00开始（0:00-5:59仍算前一天）
+const DAY_START_HOUR = 6;
 const FOCUS_MIN = 60;
 const AUX_MIN = 15;
 const RING_C = 2 * Math.PI * 84; // 527.79
@@ -507,12 +509,20 @@ function migrate(s){
     if(n.name===undefined) n.name='';
     if(n.checkMode===undefined) n.checkMode='sameday'; // 老节点默认当天确认
   });
+  // v1.2 迁移：旧的 lastAddedDate 是按 00:00 边界存的，与新的 6:00 逻辑日错位。
+  // 用各子定式精确的 createdAt 按新逻辑日重算（只有子定式消耗每日名额）。只跑一次。
+  if(!s.tree.migratedDayBoundary){
+    const childDays = (s.tree.nodes||[])
+      .filter(n=>n.parentId && n.createdAt)
+      .map(n=>dayStrOf(new Date(n.createdAt)));
+    s.tree.lastAddedDate = childDays.length ? childDays.sort().slice(-1)[0] : null;
+    s.tree.migratedDayBoundary = true;
+  }
   return s;
 }
 function save(){ localStorage.setItem(STORE_KEY, JSON.stringify(state)); schedulePush(); }
 
-// 逻辑日边界：沿用 HARNESS 的日本 30 小时制，一天从早上 6:00 开始（0:00-5:59 仍算前一天）
-const DAY_START_HOUR = 6;
+// 逻辑日边界：沿用 HARNESS 日本 30 小时制，一天从早上 6:00 开始（0:00-5:59 仍算前一天，深夜熬夜不跳天），不用 00:00
 function dayStrOf(date){
   const d = new Date(date.getTime() - DAY_START_HOUR*3600*1000);
   return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
@@ -654,6 +664,14 @@ function hasRoot(){ return N().some(n=>!n.parentId); }
 function rootNode(){ return N().find(n=>!n.parentId) || null; }
 function canAddChildToday(){ return state.tree.lastAddedDate !== todayStr(); }
 function canAddRoot(){ return !hasRoot(); }
+// 手动删除时：若被删的这批节点里含"今天刚加、正占着今日名额"的子定式，退还名额（视为撤销/改错）。
+// 仅用于手动删除；失败级联删除不退（失败是惩罚，不应因删除而免责）。
+function refundDailyIfContains(removedNodes){
+  const t = todayStr();
+  if(state.tree.lastAddedDate !== t) return; // 今天本就没占名额
+  const hit = removedNodes.some(n=> n.parentId && n.createdAt && dayStrOf(new Date(n.createdAt))===t);
+  if(hit) state.tree.lastAddedDate = null;
+}
 
 /* ---------- agent detection ---------- */
 // 桌面 Cowork 内置 askClaude；否则只要配了 Supabase 就走云函数中转（手机端也能用 AI）
@@ -963,7 +981,9 @@ document.addEventListener('click', e=>{
     const cost=subtreeSize(id);
     confirmAct('删除定式','将删除 "${c}" 及其 ${k} 个子定式，共 ${t} 个。'.replace('${c}',n.content).replace('${k}',cost-1).replace('${t}',cost),()=>{
       const ids=subtreeIds(id);
+      const removed = state.tree.nodes.filter(x=>ids.includes(x.id));
       state.tree.nodes = state.tree.nodes.filter(x=>!ids.includes(x.id));
+      refundDailyIfContains(removed); // 删了今天刚加的 → 退还今日名额
       save(); render(); toast('已删除 '+ids.length+' 个');
     });
   }
