@@ -1,6 +1,6 @@
 const fs=require('fs');
 const {JSDOM}=require('jsdom');
-const htmlPath='/sessions/focused-laughing-meitner/mnt/self-discipline/RSIP.html';
+const htmlPath='/sessions/focused-laughing-meitner/mnt/self-discipline/index.html';
 function check(l,c){ console.log((c?'PASS':'FAIL')+' '+l); if(!c) process.exitCode=1; }
 
 const dom=new JSDOM(fs.readFileSync(htmlPath,'utf8'),{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/'});

@@ -1444,7 +1444,7 @@ function notifySupported(){ return 'serviceWorker' in navigator && 'Notification
 function isStandalone(){ return window.navigator.standalone === true || (typeof window.matchMedia==='function' && window.matchMedia('(display-mode: standalone)').matches); }
 async function registerSW(){
   if(!('serviceWorker' in navigator)) return null;
-  try{ return await navigator.serviceWorker.register('/sw.js', {scope:'/'}); }
+  try{ return await navigator.serviceWorker.register('sw.js', {scope:'./'}); }
   catch(e){ console.warn('SW 注册失败', e); return null; }
 }
 // 打开任何提醒（单条/汇总）时自动申请授权。返回是否已授权。
