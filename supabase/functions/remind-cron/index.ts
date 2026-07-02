@@ -102,7 +102,7 @@ Deno.serve(async () => {
     if (!isUnconfirmed(n, dayStr)) continue; // 已确认就不打扰
     const label = n.name || n.content;
     dueItems.push({
-      key: `node:${n.id}:${dayStr}`,
+      key: `node:${n.id}:${dayStr}:${n.remindAt}`,
       title: "定式提醒",
       body: `该确认「${label}」了`,
       tag: `rsip-node-${n.id}`,
@@ -115,7 +115,7 @@ Deno.serve(async () => {
     const pending = nodes.filter((n) => isUnconfirmed(n, dayStr)).length;
     if (pending > 0) {
       dueItems.push({
-        key: `digest:${dayStr}`,
+        key: `digest:${dayStr}:${state.notify.dailyDigestAt}`,
         title: "今日待确认",
         body: `你还有 ${pending} 条定式待确认`,
         tag: "rsip-digest",

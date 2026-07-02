@@ -813,7 +813,7 @@ function renderCheckList(){
       </div>` : `<div class="ci-acts"><span class="ci-wait">🕓</span></div>`;
     return `<div class="check-item">
       <div class="ci-body">
-        <div class="ci-content">${esc(n.content)}${modeTag}</div>
+        <div class="ci-content">${esc(n.name || n.content)}${modeTag}</div>
         <div class="ci-meta">连续坚持 ${days} 天 · ${metaTail}</div>
       </div>
       ${acts}

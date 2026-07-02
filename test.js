@@ -216,6 +216,20 @@ setTimeout(()=>{
   check('import按钮', !!$('#btnImport'));
   check('无agent无AI建议按钮', $$('[data-aisuggest]').length===0);
 
+  // v1.4.1：今日打卡列表显示名字，没名字回退内容
+  evalGlobal(`
+    state.tree.nodes=[
+      {id:'k1',idx:1,content:'进门15分钟内洗澡',name:'洗澡令',parentId:null,checkMode:'sameday',status:'active',createdAt:'2020-01-01T00:00:00.000Z',log:{},remindAt:''},
+      {id:'k2',idx:2,content:'上床不带手机',name:'',parentId:'k1',checkMode:'sameday',status:'active',createdAt:'2020-01-01T00:00:00.000Z',log:{},remindAt:''}
+    ];
+    state.tree.lastAddedDate=null; save(); render();
+  `);
+  const ciTexts = $$('#checkList .ci-content').map(e=>e.textContent);
+  check('打卡列表显示名字(有名字)', ciTexts.some(t=>t.includes('洗澡令')));
+  check('打卡列表不显示该条内容原文', !ciTexts.some(t=>t.includes('进门15分钟内洗澡')));
+  check('打卡列表无名字回退内容', ciTexts.some(t=>t.includes('上床不带手机')));
+  evalGlobal('state.tree.nodes=[]; save(); render();');
+
   console.log('\n✅ 全部通过');
   process.exit(process.exitCode||0);
 },200);

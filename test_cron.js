@@ -81,17 +81,23 @@ console.log('\n== 汇总未确认计数 ==');
   ok('4 条里 2 条待确认', pending===2);
 }
 
-console.log('\n== 去重键 ==');
+console.log('\n== 去重键（含提醒时间，改时间可重推）==');
 {
   const day='2026-07-03';
-  const key = `node:abc:${day}`;
+  const key = `node:abc:${day}:09:00`;
   const lastSent = {[key]:true};
   ok('已推过的 key 被过滤', lastSent[key]===true);
-  ok('新的一天 key 不同', `node:abc:2026-07-04` !== key);
+  ok('新的一天 key 不同', `node:abc:2026-07-04:09:00` !== key);
+  // 关键：同一定式同一天，改了提醒时间 → 新键 → 能重新推
+  const keyNewTime = `node:abc:${day}:10:30`;
+  ok('改提醒时间后 key 不同（可重推）', lastSent[keyNewTime] !== true);
+  // 汇总键同理带时间
+  const digestKey = `digest:${day}:08:00`;
+  ok('汇总改时间后 key 不同', `digest:${day}:09:00` !== digestKey);
   // prune 只保留当天
-  const merged = {'node:abc:2026-07-02':true, [key]:true};
+  const merged = {[`node:abc:2026-07-02:09:00`]:true, [key]:true};
   const pruned = {}; for(const k of Object.keys(merged)) if(k.includes(day)) pruned[k]=true;
-  ok('prune 掉昨天的 key', !pruned['node:abc:2026-07-02'] && pruned[key]);
+  ok('prune 掉昨天的 key', !pruned['node:abc:2026-07-02:09:00'] && pruned[key]);
 }
 
 console.log(`\n结果：PASS ${PASS} / FAIL ${FAIL}\n`);
