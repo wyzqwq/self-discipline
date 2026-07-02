@@ -1,3 +1,11 @@
+# sw.js 必须作为独立文件直接可访问（不能被下面的 / 重写吃掉），
+# 并允许其 scope 覆盖整站。
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Service-Worker-Allowed = "/"
+    Cache-Control = "no-cache"
+
 [[redirects]]
   from = "/"
   to = "/RSIP.html"

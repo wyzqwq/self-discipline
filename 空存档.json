@@ -1,0 +1,19 @@
+{
+  "version": 1,
+  "created": "2026-07-03T00:00:00.000Z",
+  "tree": {
+    "nodes": [],
+    "lastAddedDate": null,
+    "migratedDayBoundary": true
+  },
+  "ctdp": {
+    "main": { "count": 0, "history": [] },
+    "aux": { "count": 0 },
+    "activeFocus": null,
+    "activeAux": null
+  },
+  "notify": {
+    "dailyDigestAt": "",
+    "tz": ""
+  }
+}

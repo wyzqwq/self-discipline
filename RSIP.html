@@ -228,6 +228,12 @@
   .mode-tabs .tab{flex:1;text-align:center;padding:9px 6px;border-radius:9px;font-size:13px;color:var(--ink-soft);cursor:pointer;border:none;background:transparent;font-family:var(--sans);transition:.15s}
   .mode-tabs .tab.active{background:var(--surface);color:var(--ink);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.06)}
   .locked{opacity:.4;pointer-events:none;filter:grayscale(.4)}
+  .remind-toggle{display:flex;align-items:center;gap:8px;font-size:13px;color:var(--ink);cursor:pointer;font-weight:500;margin-bottom:4px}
+  .remind-toggle input{width:auto;margin:0;accent-color:var(--sage)}
+  .time-picker{display:flex;align-items:center;gap:10px;margin-top:8px}
+  .time-picker select{flex:1;text-align:center;text-align-last:center;font-size:17px;font-variant-numeric:tabular-nums;padding:12px 8px}
+  .time-picker .tp-colon{font-weight:700;font-size:18px;color:var(--ink-soft)}
+  .time-picker.off{opacity:.35;pointer-events:none;filter:grayscale(.5)}
   .diag-card{padding:12px 13px;margin-bottom:9px;border-radius:12px;background:var(--surface);border:1px solid var(--sage-soft);cursor:pointer;transition:.15s}
   .diag-card:active{transform:scale(.98)}
   .diag-card.picked{border-color:var(--sage);background:var(--sage-soft)}
@@ -272,6 +278,9 @@
       <span>自控台<span class="sub">· 定式与专注</span><span class="sync-dot" id="syncDot"></span></span>
     </div>
     <div class="tools">
+      <button class="icon-btn" id="btnNotify" title="提醒设置">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
+      </button>
       <button class="icon-btn" id="btnSync" title="同步设置">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg>
       </button>
@@ -426,6 +435,15 @@
     <div class="ttl">AI 建议的名字 · 点击采用</div>
     <div id="aiNameChips"></div>
   </div>
+  <div class="field" id="remindField">
+    <label class="remind-toggle"><input type="checkbox" id="remindOn"> 到点提醒我确认这条定式</label>
+    <div class="opt" style="font-size:11px;margin:2px 0 2px;line-height:1.5">开启后，每天到设定时间推送提醒（需已在「提醒设置」里授权）。</div>
+    <div class="time-picker off" id="remindPicker">
+      <select id="remindHour"></select>
+      <span class="tp-colon">:</span>
+      <select id="remindMin"></select>
+    </div>
+  </div>
   <div class="btn-row">
     <button class="btn ghost" id="addCancel">取消</button>
     <button class="btn primary" id="addConfirm">加入定式树</button>
@@ -464,6 +482,30 @@
   </div>
 </div>
 
+<div class="sheet" id="notifySheet">
+  <div class="grip"></div>
+  <h3>提醒设置</h3>
+  <p class="desc">到点提醒你回顾定式、开始专注。目前仅支持苹果设备（iOS 16.4+）。</p>
+  <div class="field">
+    <label>当前状态</label>
+    <div id="notifyStatus" style="font-size:13px;color:var(--ink-soft);padding:10px 13px;background:var(--bg-soft);border-radius:11px;line-height:1.6"></div>
+  </div>
+  <div id="notifyGuide" style="display:none;font-size:13px;color:var(--ink-soft);padding:10px 13px;background:var(--bg-soft);border-radius:11px;line-height:1.7;margin-bottom:12px"></div>
+  <div class="field" id="digestField">
+    <label class="remind-toggle"><input type="checkbox" id="digestOn"> 每天汇总提醒未确认的定式</label>
+    <div class="opt" style="font-size:11px;margin:2px 0 2px;line-height:1.5">到点提醒你今天还有几条待确认（含当天要确认的和次日回顾昨天的）。</div>
+    <div class="time-picker off" id="digestPicker">
+      <select id="digestHour"></select>
+      <span class="tp-colon">:</span>
+      <select id="digestMin"></select>
+    </div>
+  </div>
+  <div class="btn-row">
+    <button class="btn ghost" id="notifyTest" style="display:none">发一条测试通知</button>
+    <button class="btn primary" id="notifyEnable">开启提醒</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <input type="file" id="fileInput" accept="application/json" style="display:none">
 
@@ -495,7 +537,8 @@ function defaultState(){
   return {
     version:1, created:new Date().toISOString(),
     tree:{ nodes:[], lastAddedDate:null },
-    ctdp:{ main:{count:0, history:[]}, aux:{count:0}, activeFocus:null, activeAux:null }
+    ctdp:{ main:{count:0, history:[]}, aux:{count:0}, activeFocus:null, activeAux:null },
+    notify:{ dailyDigestAt:'' }   // 每日汇总提醒时间 'HH:MM'，空=不开汇总
   };
 }
 function migrate(s){
@@ -505,10 +548,14 @@ function migrate(s){
   if(!s.ctdp.main) s.ctdp.main = {count:0,history:[]};
   if(!s.ctdp.main.history) s.ctdp.main.history = [];
   if(!s.ctdp.aux) s.ctdp.aux = {count:0};
+  if(!s.notify) s.notify = {dailyDigestAt:'', tz:''};        // v1.4 提醒：补全局汇总时间
+  if(s.notify.dailyDigestAt===undefined) s.notify.dailyDigestAt='';
+  if(s.notify.tz===undefined) s.notify.tz='';                // v1.4 阶段二：用户时区，服务端比对本地时钟用
   // 老数据：节点补 name 字段（空串），保留旧的 problem/intervention 不再展示
   (s.tree.nodes||[]).forEach(n=>{
     if(n.name===undefined) n.name='';
     if(n.checkMode===undefined) n.checkMode='sameday'; // 老节点默认当天确认
+    if(n.remindAt===undefined) n.remindAt='';          // v1.4 提醒：单条提醒时间 'HH:MM'，空=不提醒
   });
   // v1.2 迁移：旧的 lastAddedDate 是按 00:00 边界存的，与新的 6:00 逻辑日错位。
   // 用各子定式精确的 createdAt 按新逻辑日重算（只有子定式消耗每日名额）。只跑一次。
@@ -812,14 +859,14 @@ function renderNode(n){
           <div class="body">
             ${n.name?`<div class="content">${esc(n.name)}</div><div class="node-rule">${esc(n.content)}</div>`:`<div class="content">${esc(n.content)}</div>`}
             <div class="meta">
-              <div>坚持 ${days} 天 · ${nextday?'次日回顾 · ':''}状态：${stTxt} · 加入于 ${n.createdAt.slice(0,10)}</div>
+              <div>坚持 ${days} 天 · ${nextday?'次日回顾 · ':''}状态：${stTxt} · 加入于 ${n.createdAt.slice(0,10)}${n.remindAt?` · ⏰ ${n.remindAt}`:''}</div>
             </div>
           </div>
           <div class="cost">代价 <b>${cost}</b></div>
         </div>
         <div class="actions">${checkBtns}
           <button class="mini" data-addchild="${n.id}">+ 子定式</button>
-          <button class="mini" data-rename="${n.id}">重命名</button>
+          <button class="mini" data-edit="${n.id}">修改</button>
           <button class="mini bad" data-del="${n.id}">删除</button>
         </div>
       </div>
@@ -974,10 +1021,10 @@ document.addEventListener('click', e=>{
   if(ac){ openAddSheet(ac.dataset.addchild); }
 });
 
-// rename
+// 修改（整合了原重命名 + 提醒时间）
 document.addEventListener('click', e=>{
-  const rn = e.target.closest('[data-rename]');
-  if(rn){ openRenameSheet(rn.dataset.rename); }
+  const rn = e.target.closest('[data-edit]');
+  if(rn){ openRenameSheet(rn.dataset.edit); }
 });
 
 // delete
@@ -1019,6 +1066,38 @@ function setCheckMode(cmode){
     : '当天就能判断是否做到（如"进门先洗澡"）。';
 }
 function getCheckMode(){ const a=document.querySelector('#checkModeTabs .tab.active'); return a?a.dataset.cmode:'sameday'; }
+
+// —— 提醒时间滚动选择器（小时 00-23，分钟每 5 分）通用于「单条提醒」和「每日汇总」——
+function fillTimeSelect(hSel,mSel){
+  if(hSel.options.length===0){
+    for(let h=0;h<24;h++){ const o=document.createElement('option'); o.value=String(h).padStart(2,'0'); o.textContent=String(h).padStart(2,'0'); hSel.appendChild(o); }
+    for(let m=0;m<60;m+=5){ const o=document.createElement('option'); o.value=String(m).padStart(2,'0'); o.textContent=String(m).padStart(2,'0'); mSel.appendChild(o); }
+  }
+}
+// prefix: 'remind' 或 'digest'（对应 #remindOn/#remindHour/#remindMin/#remindPicker 等）
+function setTimePicker(prefix, val){ // val: 'HH:MM' 或 ''
+  const hSel=document.getElementById(prefix+'Hour'), mSel=document.getElementById(prefix+'Min');
+  fillTimeSelect(hSel,mSel);
+  const on = !!val;
+  document.getElementById(prefix+'On').checked = on;
+  let hh='21', mm='00';
+  if(val && /^\d{2}:\d{2}$/.test(val)){ hh=val.slice(0,2); mm=val.slice(3,5); }
+  const mnum = Math.round(parseInt(mm,10)/5)*5 % 60; mm=String(mnum).padStart(2,'0');
+  hSel.value=hh; mSel.value=mm;
+  document.getElementById(prefix+'Picker').classList.toggle('off', !on);
+}
+function getTimePicker(prefix){ // 返回 'HH:MM' 或 ''
+  if(!document.getElementById(prefix+'On').checked) return '';
+  return document.getElementById(prefix+'Hour').value + ':' + document.getElementById(prefix+'Min').value;
+}
+// 兼容旧名：单条提醒
+function setRemindPicker(v){ setTimePicker('remind', v); }
+function getRemindValue(){ return getTimePicker('remind'); }
+document.getElementById('remindOn').addEventListener('change', ()=>{
+  const on=document.getElementById('remindOn').checked;
+  document.getElementById('remindPicker').classList.toggle('off', !on);
+  if(on) ensureNotifyPermission();   // 开单条提醒即自动申请授权
+});
 function buildParentOptions(){
   const sel = document.getElementById('addParent');
   const rootOpt = canAddRoot() ? `<option value="">（作为根定式 · 全树管理要求）</option>` : '';
@@ -1052,6 +1131,7 @@ function openAddSheet(parentId){
   document.getElementById('diagPanel').classList.remove('show');
   document.getElementById('aiNamePanel').classList.remove('show');
   document.getElementById('aiSuggestPanel').classList.remove('show');
+  setRemindPicker('');   // 新增定式默认不提醒
   // 无 agent 时禁用诊断 tab
   const diagTab = document.querySelector('#addTabs .tab[data-mode="diag"]');
   diagTab.style.display = hasAgent() ? '' : 'none';
@@ -1082,10 +1162,10 @@ function weightedAncestorText(parentId){
   return `这条新定式所在的上级脉络（从近到远，每层标注了参考权重，权重呈指数递减）：\n${lines.join('\n')}\n请严格按上面标注的权重比例综合参考各级祖先：权重高的层影响更大，但权重低的上层也必须体现、不可忽略——最终建议应同时贴合直接父定式并与整条脉络的主题方向一致，按权重配比而非只看最高的一层。`;
 }
 
-// 重命名模式：白名单——只放开"定式名字"，其余 addSheet 内容一律锁灰。
+// 修改模式：白名单——只放开"定式名字 + 提醒时间"，其余 addSheet 内容一律锁灰。
 // 以后表单新增栏目默认也是锁住的（不在白名单里就锁）。
 let renameId = null;
-const RENAME_UNLOCK = ['addTitle','addDesc','nameField','aiNamePanel'];  // 另加 .grip / .btn-row 见下
+const RENAME_UNLOCK = ['addTitle','addDesc','nameField','aiNamePanel','remindField'];  // 另加 .grip / .btn-row 见下
 function setRenameLock(on){
   const sheet = document.getElementById('addSheet');
   Array.from(sheet.children).forEach(el=>{
@@ -1102,12 +1182,13 @@ function openRenameSheet(id){
   document.getElementById('addParent').value = n.parentId || '';
   document.getElementById('addContent').value = n.content || '';
   document.getElementById('addName').value = n.name || '';
+  setRemindPicker(n.remindAt || '');
   document.getElementById('aiNamePanel').classList.remove('show');
   document.getElementById('aiSuggestPanel').classList.remove('show');
   document.getElementById('diagPanel').classList.remove('show');
-  document.getElementById('addTitle').textContent = '重命名定式';
-  document.getElementById('addDesc').textContent = '只修改定式名字，其它内容此处不可改。';
-  document.getElementById('addConfirm').textContent = '保存名字';
+  document.getElementById('addTitle').textContent = '修改定式';
+  document.getElementById('addDesc').textContent = '可修改定式名字与提醒时间，其它内容此处不可改。';
+  document.getElementById('addConfirm').textContent = '保存';
   document.getElementById('aiNameBtn').style.display = hasAgent() ? '' : 'none';
   setRenameLock(true);
   openSheet('addSheet');
@@ -1126,13 +1207,14 @@ document.getElementById('checkModeTabs').addEventListener('click', e=>{
 document.getElementById('fabAdd').addEventListener('click', ()=>openAddSheet(''));
 document.getElementById('addCancel').addEventListener('click', closeSheets);
 document.getElementById('addConfirm').addEventListener('click', ()=>{
-  // 重命名模式：只改名字，不动其它
+  // 修改模式：只改名字与提醒时间，不动其它
   if(renameId){
     const n = findNode(renameId);
     if(!n){ renameId=null; closeSheets(); return; }
     n.name = document.getElementById('addName').value.trim();
+    n.remindAt = getRemindValue();
     save(); render(); closeSheets();
-    toast('已更新名字');
+    toast('已保存修改');
     return;
   }
   const content = document.getElementById('addContent').value.trim();
@@ -1150,7 +1232,7 @@ document.getElementById('addConfirm').addEventListener('click', ()=>{
     content, name: document.getElementById('addName').value.trim(), parentId,
     checkMode: getCheckMode(),
     createdAt: new Date().toISOString(),
-    status:'active', log:{}
+    status:'active', log:{}, remindAt: getRemindValue()
   };
   N().push(node);
   // 只有子定式消耗每日名额；根定式不占
@@ -1353,6 +1435,186 @@ document.getElementById('btnExport').addEventListener('click', ()=>{
   toast('已导出 JSON');
 });
 document.getElementById('btnImport').addEventListener('click', ()=>document.getElementById('fileInput').click());
+
+/* ---------- 提醒（v1.4 阶段一：iOS 授权 + 本地测试通知）---------- */
+// 只适配苹果：需 iOS 16.4+、已加主屏幕（standalone）、用户手动授权。
+function notifySupported(){ return 'serviceWorker' in navigator && 'Notification' in window && 'PushManager' in window; }
+function isStandalone(){ return window.navigator.standalone === true || (typeof window.matchMedia==='function' && window.matchMedia('(display-mode: standalone)').matches); }
+async function registerSW(){
+  if(!('serviceWorker' in navigator)) return null;
+  try{ return await navigator.serviceWorker.register('/sw.js', {scope:'/'}); }
+  catch(e){ console.warn('SW 注册失败', e); return null; }
+}
+// 打开任何提醒（单条/汇总）时自动申请授权。返回是否已授权。
+// 不弹硬阻断：不支持/未加主屏幕/被拒时只给一次轻提示，仍允许保存时间（等满足条件再生效）。
+let _notifyHintShown = false;
+async function ensureNotifyPermission(){
+  if(!notifySupported()){
+    if(!_notifyHintShown){ toast('此设备不支持推送，时间已存，换苹果设备并加主屏幕后生效', true); _notifyHintShown=true; }
+    return false;
+  }
+  if(!isStandalone()){
+    if(!_notifyHintShown){ toast('时间已存 · 需把本页「添加到主屏幕」再从图标打开才能真正推送', true); _notifyHintShown=true; }
+    return false;
+  }
+  let perm=Notification.permission;
+  if(perm==='default'){
+    try{ perm=await Notification.requestPermission(); }catch(e){ perm=Notification.permission; }
+  }
+  if(perm==='granted'){ await registerSW(); await subscribePush(); updateNotifyUI(); return true; }
+  if(perm==='denied' && !_notifyHintShown){ toast('通知权限被拒 · 请到 iOS 设置→自控台→通知里打开', true); _notifyHintShown=true; }
+  updateNotifyUI();
+  return false;
+}
+
+/* ---------- v1.4 阶段二：Web Push 真订阅 ---------- */
+// VAPID 公钥（公开，安全放前端）；私钥只在 Supabase secret 里。
+const VAPID_PUBLIC_KEY = 'BCjhxpBZP52iZft85BU7t5YDj_-SQg_ngokX3AOPa6k24bK_EconIoBPoLGAu9db_86vmHg-Aj1NjlkJy6KaBJM';
+// 设备唯一标识：一台设备一行订阅，跨设备互不覆盖。
+const DEVICE_ID_KEY = 'rsip_device_id_v1';
+function getDeviceId(){
+  let id = localStorage.getItem(DEVICE_ID_KEY);
+  if(!id){ id = (self.crypto&&crypto.randomUUID?crypto.randomUUID():('d'+Date.now()+Math.random().toString(36).slice(2))); localStorage.setItem(DEVICE_ID_KEY, id); }
+  return id;
+}
+function urlB64ToUint8Array(base64String){
+  const padding='='.repeat((4-base64String.length%4)%4);
+  const base64=(base64String+padding).replace(/-/g,'+').replace(/_/g,'/');
+  const raw=atob(base64); const arr=new Uint8Array(raw.length);
+  for(let i=0;i<raw.length;i++) arr[i]=raw.charCodeAt(i);
+  return arr;
+}
+// 授权后订阅推送，并把订阅写进 Supabase push_subscriptions（按 device_id upsert）。
+async function subscribePush(){
+  if(!notifySupported() || Notification.permission!=='granted') return false;
+  if(!syncCfg.url || !syncCfg.key) return false;   // 没配云端就没法存订阅
+  // 记录用户时区，让服务端能按用户本地时钟比对提醒时间；随云同步上去
+  try{
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    if(tz && state.notify && state.notify.tz!==tz){ state.notify.tz = tz; save(); }
+  }catch(e){}
+  try{
+    const reg = await navigator.serviceWorker.ready;
+    let sub = await reg.pushManager.getSubscription();
+    if(!sub){
+      sub = await reg.pushManager.subscribe({ userVisibleOnly:true, applicationServerKey: urlB64ToUint8Array(VAPID_PUBLIC_KEY) });
+    }
+    const j = sub.toJSON();
+    const row = {
+      device_id: getDeviceId(),
+      endpoint: j.endpoint,
+      p256dh: j.keys && j.keys.p256dh,
+      auth: j.keys && j.keys.auth,
+      updated_at: Date.now()
+    };
+    // upsert：device_id 冲突则更新（表以 device_id 为主键）
+    await supabaseCall('push_subscriptions', {
+      method:'POST',
+      headers:{ 'apikey':syncCfg.key, 'Authorization':'Bearer '+syncCfg.key, 'Content-Type':'application/json', 'Prefer':'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify(row)
+    });
+    return true;
+  }catch(e){ console.warn('订阅推送失败', e); return false; }
+}
+// 取消订阅（断开提醒时）：删本地订阅 + 删 Supabase 行。
+async function unsubscribePush(){
+  try{
+    const reg = await navigator.serviceWorker.getRegistration();
+    const sub = reg && await reg.pushManager.getSubscription();
+    if(sub) await sub.unsubscribe();
+  }catch(e){}
+  try{
+    if(syncCfg.url && syncCfg.key){
+      await supabaseCall('push_subscriptions?device_id=eq.'+encodeURIComponent(getDeviceId()), { method:'DELETE', headers:{ 'apikey':syncCfg.key, 'Authorization':'Bearer '+syncCfg.key } });
+    }
+  }catch(e){}
+}
+function updateNotifyUI(){
+  const statusEl=document.getElementById('notifyStatus');
+  const guideEl=document.getElementById('notifyGuide');
+  const enableBtn=document.getElementById('notifyEnable');
+  const testBtn=document.getElementById('notifyTest');
+  guideEl.style.display='none'; testBtn.style.display='none';
+  enableBtn.style.display=''; enableBtn.disabled=false;
+  if(!notifySupported()){
+    statusEl.textContent='此设备/浏览器不支持网页提醒。';
+    enableBtn.disabled=true; enableBtn.style.display='none';
+    return;
+  }
+  if(!isStandalone()){
+    statusEl.textContent='还没从主屏幕打开。';
+    guideEl.style.display=''; enableBtn.disabled=true;
+    guideEl.innerHTML='iOS 只有把本页「添加到主屏幕」、再从主屏幕图标打开，才能开启提醒：<br>① Safari 底部分享按钮 → ②「添加到主屏幕」→ ③ 从桌面图标打开本页 → ④ 回到这里点「开启提醒」。';
+    return;
+  }
+  const perm=Notification.permission;
+  if(perm==='granted'){
+    statusEl.textContent='提醒已开启。到点我会推送提醒你确认定式。';
+    enableBtn.textContent='已开启'; enableBtn.disabled=true;
+    testBtn.style.display='';
+  }else if(perm==='denied'){
+    statusEl.textContent='通知权限已被拒绝。请到 iOS 设置 →「自控台」→ 通知里手动打开。';
+    enableBtn.disabled=true;
+  }else{
+    statusEl.textContent='已就绪，点下面按钮授权通知。';
+    enableBtn.textContent='开启提醒';
+  }
+}
+document.getElementById('btnNotify').addEventListener('click', ()=>{
+  updateNotifyUI();
+  setTimePicker('digest', (state.notify && state.notify.dailyDigestAt) || '');
+  openSheet('notifySheet');
+});
+// 每日汇总开关：开启即自动申请授权
+document.getElementById('digestOn').addEventListener('change', ()=>{
+  const on=document.getElementById('digestOn').checked;
+  document.getElementById('digestPicker').classList.toggle('off', !on);
+  if(!state.notify) state.notify = {dailyDigestAt:''};
+  state.notify.dailyDigestAt = getTimePicker('digest');
+  save();
+  toast(state.notify.dailyDigestAt ? '每日汇总 '+state.notify.dailyDigestAt : '已关闭每日汇总');
+  if(on) ensureNotifyPermission();
+});
+// 汇总时/分改动即时保存
+['digestHour','digestMin'].forEach(id=>{
+  document.getElementById(id).addEventListener('change', ()=>{
+    if(!document.getElementById('digestOn').checked) return;
+    if(!state.notify) state.notify = {dailyDigestAt:''};
+    state.notify.dailyDigestAt = getTimePicker('digest');
+    save();
+    toast('每日汇总 '+state.notify.dailyDigestAt);
+  });
+});
+document.getElementById('notifyEnable').addEventListener('click', async ()=>{
+  if(!notifySupported()){ toast('此设备不支持提醒', true); return; }
+  if(!isStandalone()){ toast('请先添加到主屏幕再开启', true); return; }
+  const btn=document.getElementById('notifyEnable');
+  btn.textContent='授权中…'; btn.disabled=true;
+  let perm;
+  try{ perm=await Notification.requestPermission(); }
+  catch(e){ perm=Notification.permission; }
+  if(perm==='granted'){
+    const reg=await registerSW();
+    if(reg){
+      await navigator.serviceWorker.ready;
+      await subscribePush();   // 注册后立即订阅并把凭据写进 Supabase
+      toast('提醒已开启');
+      // 立即发一条本地测试通知，让用户确认能弹出来
+      (reg.active||navigator.serviceWorker.controller)?.postMessage({type:'test-notification', title:'自控台', body:'提醒已开启，这是一条测试通知。'});
+    }else{
+      toast('Service Worker 注册失败', true);
+    }
+  }else{
+    toast('未获得通知权限', true);
+  }
+  updateNotifyUI();
+});
+document.getElementById('notifyTest').addEventListener('click', async ()=>{
+  const reg=await navigator.serviceWorker.getRegistration();
+  if(reg){ (reg.active||navigator.serviceWorker.controller)?.postMessage({type:'test-notification', title:'自控台', body:'这是一条测试通知。'}); toast('已发送测试通知'); }
+  else{ toast('请先开启提醒', true); }
+});
+
 document.getElementById('btnSync').addEventListener('click', ()=>{
   document.getElementById('syncUrl').value=syncCfg.url||'';
   document.getElementById('syncKey').value=syncCfg.key||'';
@@ -1394,6 +1656,8 @@ document.getElementById('fileInput').addEventListener('change', e=>{
 render();
 timer = setInterval(tick, 500);
 initSync();
+// 已授权则开机自动注册 SW，保证通知通道存活
+if(notifySupported() && Notification.permission==='granted'){ registerSW().then(()=>subscribePush()); }
 // re-render on resume
 document.addEventListener('visibilitychange', ()=>{ if(!document.hidden){ render(); syncPull(); } });
 </script>
