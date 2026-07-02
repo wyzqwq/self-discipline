@@ -47,6 +47,15 @@ function nowInTz(tz: string) {
   return { hh, mm, minutes, dayStr };
 }
 
+// 把任意时刻按某时区算成 6:00 逻辑日 YYYY-MM-DD（与 nowInTz 的逻辑日算法一致）。
+function dayStrOfInTz(date: Date, tz: string): string | null {
+  if (isNaN(date.getTime())) return null;
+  const shifted = new Date(date.getTime() - DAY_START_HOUR * 3600 * 1000);
+  const dfmt = new Intl.DateTimeFormat("en-CA", { timeZone: tz || "UTC", year: "numeric", month: "2-digit", day: "2-digit" });
+  const dp = Object.fromEntries(dfmt.formatToParts(shifted).map(p => [p.type, p.value]));
+  return `${dp.year}-${dp.month}-${dp.day}`;
+}
+
 function hhmmToMinutes(s: string): number | null {
   if (!s || !/^\d{2}:\d{2}$/.test(s)) return null;
   return parseInt(s.slice(0, 2), 10) * 60 + parseInt(s.slice(3, 5), 10);
@@ -58,8 +67,14 @@ function dateStrOffset(dayStr: string, offset: number): string {
   const dt = new Date(Date.UTC(y, m - 1, d + offset));
   return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth() + 1).padStart(2, "0")}-${String(dt.getUTCDate()).padStart(2, "0")}`;
 }
-function isUnconfirmed(node: any, dayStr: string): boolean {
+function isUnconfirmed(node: any, dayStr: string, tz: string): boolean {
   const nextday = node.checkMode === "nextday";
+  // 次日回顾：今天刚建的节点，明天起才开始回顾昨天——当天不提醒、不计入汇总。
+  // 与前端 checkReady 一致：nextday && createdAt 逻辑日 === 今天 → 尚未就绪。
+  if (nextday && node.createdAt) {
+    const created = dayStrOfInTz(new Date(node.createdAt), tz);
+    if (created === dayStr) return false;
+  }
   const target = nextday ? dateStrOffset(dayStr, -1) : dayStr;
   const st = node.log && node.log[target];
   return st !== "success" && st !== "fail"; // 未打卡（成功/失败都算已确认）
@@ -99,7 +114,7 @@ Deno.serve(async () => {
     const rm = hhmmToMinutes(n.remindAt || "");
     if (rm === null) continue;
     if (rm > minutes || rm <= minutes - WINDOW_MIN) continue;
-    if (!isUnconfirmed(n, dayStr)) continue; // 已确认就不打扰
+    if (!isUnconfirmed(n, dayStr, tz)) continue; // 已确认就不打扰
     const label = n.name || n.content;
     dueItems.push({
       key: `node:${n.id}:${dayStr}:${n.remindAt}`,
@@ -112,7 +127,7 @@ Deno.serve(async () => {
   // 每日汇总：dailyDigestAt 命中窗口 → 统计未确认条数
   const digest = hhmmToMinutes((state.notify && state.notify.dailyDigestAt) || "");
   if (digest !== null && digest <= minutes && digest > minutes - WINDOW_MIN) {
-    const pending = nodes.filter((n) => isUnconfirmed(n, dayStr)).length;
+    const pending = nodes.filter((n) => isUnconfirmed(n, dayStr, tz)).length;
     if (pending > 0) {
       dueItems.push({
         key: `digest:${dayStr}:${state.notify.dailyDigestAt}`,

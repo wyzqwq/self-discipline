@@ -21,7 +21,8 @@ function nowInTz(tz, now){
 }
 function hhmmToMinutes(s){ if(!s||!/^\d{2}:\d{2}$/.test(s)) return null; return parseInt(s.slice(0,2),10)*60+parseInt(s.slice(3,5),10); }
 function dateStrOffset(dayStr, offset){ const [y,m,d]=dayStr.split("-").map(Number); const dt=new Date(Date.UTC(y,m-1,d+offset)); return `${dt.getUTCFullYear()}-${String(dt.getUTCMonth()+1).padStart(2,"0")}-${String(dt.getUTCDate()).padStart(2,"0")}`; }
-function isUnconfirmed(node, dayStr){ const nextday=node.checkMode==="nextday"; const target=nextday?dateStrOffset(dayStr,-1):dayStr; const st=node.log&&node.log[target]; return st!=="success"&&st!=="fail"; }
+function dayStrOfInTz(date, tz){ if(isNaN(date.getTime())) return null; const shifted=new Date(date.getTime()-DAY_START_HOUR*3600*1000); const dfmt=new Intl.DateTimeFormat("en-CA",{timeZone:tz||"UTC",year:"numeric",month:"2-digit",day:"2-digit"}); const dp=Object.fromEntries(dfmt.formatToParts(shifted).map(p=>[p.type,p.value])); return `${dp.year}-${dp.month}-${dp.day}`; }
+function isUnconfirmed(node, dayStr, tz){ const nextday=node.checkMode==="nextday"; if(nextday&&node.createdAt){ const created=dayStrOfInTz(new Date(node.createdAt), tz||"UTC"); if(created===dayStr) return false; } const target=nextday?dateStrOffset(dayStr,-1):dayStr; const st=node.log&&node.log[target]; return st!=="success"&&st!=="fail"; }
 // 命中窗口：remindAt 落在 (minutes-WINDOW, minutes]
 function hits(atStr, minutes){ const at=hhmmToMinutes(atStr); if(at===null) return false; return at<=minutes && at>minutes-WINDOW_MIN; }
 
@@ -66,6 +67,11 @@ console.log('\n== 未确认判定 ==');
   ok('nextday 看昨天 07-02 没打卡 → 未确认', isUnconfirmed({checkMode:'nextday',log:{}}, day));
   ok('nextday 昨天 success → 已确认', !isUnconfirmed({checkMode:'nextday',log:{'2026-07-02':'success'}}, day));
   ok('nextday 只看昨天，前天的记录无关', isUnconfirmed({checkMode:'nextday',log:{'2026-07-01':'success'}}, day));
+  // v1.4.4 bug 修复：今天刚建的 nextday 节点，当天不该提醒（明天起才回顾昨天）
+  ok('nextday 今天刚建（createdAt 逻辑日=今天）→ 当天不提醒', !isUnconfirmed({checkMode:'nextday',log:{},createdAt:'2026-07-03T10:00:00Z'}, day, 'UTC'));
+  ok('nextday 昨天建的（createdAt 逻辑日=昨天）→ 照常看昨天=未确认', isUnconfirmed({checkMode:'nextday',log:{},createdAt:'2026-07-02T10:00:00Z'}, day, 'UTC'));
+  ok('nextday 今天刚建但已给昨天补过 success → 仍算已确认', !isUnconfirmed({checkMode:'nextday',log:{'2026-07-02':'success'},createdAt:'2026-07-02T10:00:00Z'}, day, 'UTC'));
+  ok('sameday 今天刚建 → 不受此规则影响，正常未确认', isUnconfirmed({checkMode:'sameday',log:{},createdAt:'2026-07-03T10:00:00Z'}, day, 'UTC'));
 }
 
 console.log('\n== 汇总未确认计数 ==');
