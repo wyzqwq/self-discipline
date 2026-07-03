@@ -363,13 +363,12 @@
         <div class="chain-box"><div class="n" id="todayFocus">0</div><div class="l">今日专注</div></div>
       </div>
       <div class="btn-row">
-        <button class="btn primary" id="btnStart">坐上座位 · 开始</button>
-        <button class="btn" id="btnFinish" style="display:none">完成 · +1</button>
-        <button class="btn danger" id="btnClear" style="display:none">失败 · 清零</button>
+        <button class="btn primary" id="btnStart" style="display:none">坐上座位 · 开始</button>
+        <button class="btn danger" id="btnClear" style="display:none">放弃 · 判失败</button>
       </div>
       <div class="leaf-note" style="margin-top:16px">
-        <b>CTDP</b>　触发预约信号后 15 分钟内必须开始主任务；主任务以最好状态完成一小时，记 #N+1。
-        任意一次失败，主链清零、从 #1 重新开始。中途疑似违规，按"下必为例"处理。
+        <b>CTDP</b>　先打响指预约，15 分钟内点「坐上座位·开始」即记一次成功预约并进入专注。
+        专注必须计时满一小时自动完成才记 #N+1；中途放弃即判失败，主链清零、从 #1 重新开始。
       </div>
     </div>
   </div>
@@ -909,10 +908,16 @@ function renderCTDP(){
   }else{
     auxD.textContent='15:00'; auxD.classList.remove('danger');
     auxRing.style.strokeDashoffset=RING_C; auxRing.classList.remove('danger');
-    auxS.textContent='未启动';
-    document.getElementById('btnSnap').style.display='';
     document.getElementById('btnAuxFail').style.display='none';
     document.getElementById('auxDot').style.display='none';
+    if(state.ctdp.activeFocus){
+      // 专注中：预约已兑现，锁住打响指，避免重复预约
+      auxS.textContent='专注中 · 已就座';
+      document.getElementById('btnSnap').style.display='none';
+    }else{
+      auxS.textContent='未启动';
+      document.getElementById('btnSnap').style.display='';
+    }
   }
 
   // focus
@@ -930,14 +935,14 @@ function renderCTDP(){
     fRing.classList.toggle('danger', remain<60);
     fS.textContent = remain>0?'专注中 · 保持最好状态':'已完成';
     document.getElementById('btnStart').style.display='none';
-    document.getElementById('btnFinish').style.display='';
     document.getElementById('btnClear').style.display='';
   }else{
     fD.textContent='60:00'; fD.classList.remove('danger');
     fRing.style.strokeDashoffset=RING_C; fRing.classList.remove('danger');
-    fS.textContent='未开始';
-    document.getElementById('btnStart').style.display='';
-    document.getElementById('btnFinish').style.display='none';
+    // 只有“有未超时的预约”时才显示开始按钮；否则隐藏（必须先预约）
+    const auxLive = aux && (Date.now()-aux.triggeredAt)/1000 < AUX_MIN*60;
+    fS.textContent = auxLive ? '预约中 · 点开始坐上座位' : '未开始 · 先打响指预约';
+    document.getElementById('btnStart').style.display = auxLive ? '' : 'none';
     document.getElementById('btnClear').style.display='none';
   }
 }
@@ -965,11 +970,7 @@ function completeFocus(){
   state.ctdp.main.count += 1;
   state.ctdp.main.history.push(new Date().toISOString());
   state.ctdp.activeFocus = null;
-  // aux success if was active
-  if(state.ctdp.activeAux){
-    state.ctdp.aux.count += 1;
-    state.ctdp.activeAux = null;
-  }
+  // 预约成功已在“坐上座位·开始”时结算，这里只加主链，不重复计预约。
   save();
   toast('专注完成 · #'+state.ctdp.main.count+' 🎉');
 }
@@ -1406,6 +1407,7 @@ function toast(msg, warn){ const t=document.getElementById('toast'); t.textConte
 /* ---------- CTDP buttons ---------- */
 document.getElementById('btnSnap').addEventListener('click', ()=>{
   if(state.ctdp.activeAux) return;
+  if(state.ctdp.activeFocus){ toast('专注中，无需再预约', true); return; }
   state.ctdp.activeAux = { triggeredAt: Date.now() };
   save(); renderCTDP(); toast('已预约 · 15 分钟内坐上座位');
 });
@@ -1415,15 +1417,23 @@ document.getElementById('btnAuxFail').addEventListener('click', ()=>{
   });
 });
 document.getElementById('btnStart').addEventListener('click', ()=>{
+  // 必须先有未超时的预约才能开始
+  const aux = state.ctdp.activeAux;
+  if(!aux){ toast('请先打响指预约', true); return; }
+  if((Date.now()-aux.triggeredAt)/1000 >= AUX_MIN*60){
+    state.ctdp.activeAux=null; state.ctdp.aux.count=0; save(); renderCTDP();
+    toast('预约已超时 · 预约链清零', true); return;
+  }
+  // 坐上座位即视作一次成功预约：预约链 +1，结束本次预约，启动专注
+  state.ctdp.aux.count += 1;
+  state.ctdp.activeAux = null;
   state.ctdp.activeFocus = { startedAt: Date.now() };
-  save(); renderCTDP(); toast('专注开始 · 保持最好状态');
+  save(); renderCTDP(); toast('预约成功 · 专注开始，保持最好状态');
 });
-document.getElementById('btnFinish').addEventListener('click', completeFocus);
 document.getElementById('btnClear').addEventListener('click', ()=>{
-  confirmAct('主链清零','本次专注判为失败，主链节点数清零、从 #1 重新开始。确认？',()=>{
+  confirmAct('放弃 · 判失败','中途停止即视为本次专注失败，主链节点数清零、从 #1 重新开始。确认放弃？',()=>{
     state.ctdp.activeFocus=null; state.ctdp.main.count=0;
-    if(state.ctdp.activeAux){ state.ctdp.activeAux=null; state.ctdp.aux.count=0; }
-    save(); render(); toast('主链已清零', true);
+    save(); render(); toast('已放弃 · 主链清零', true);
   });
 });
 

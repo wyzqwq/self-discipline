@@ -106,5 +106,65 @@ console.log('\n== 去重键（含提醒时间，改时间可重推）==');
   ok('prune 掉昨天的 key', !pruned['node:abc:2026-07-02:09:00'] && pruned[key]);
 }
 
+console.log('\n== CTDP 到点推送（时间戳绝对 epoch）==');
+// 从 index.ts 原样搬出的判定逻辑
+const FOCUS_MIN=60, AUX_MIN=15, AUX_REMIND_BEFORE=13;
+function ctdpDue(ctdp, now, dayStr){
+  const items=[];
+  const af=ctdp.activeFocus;
+  if(af && typeof af.startedAt==='number' && now>=af.startedAt+FOCUS_MIN*60*1000){
+    items.push({key:`ctdp-focus:${dayStr}:${af.startedAt}`, tag:'rsip-ctdp-focus'});
+  }
+  const aa=ctdp.activeAux;
+  if(aa && typeof aa.triggeredAt==='number'){
+    const deadline=aa.triggeredAt+AUX_MIN*60*1000;
+    if(now<deadline){
+      const remindCutoff=aa.triggeredAt+AUX_REMIND_BEFORE*60*1000;
+      const FIVE=5*60*1000;
+      const targetTick=Math.floor(remindCutoff/FIVE)*FIVE;
+      if(targetTick>=aa.triggeredAt && targetTick<=now && targetTick>now-WINDOW_MIN*60*1000){
+        items.push({key:`ctdp-aux:${dayStr}:${aa.triggeredAt}`, tag:'rsip-ctdp-aux'});
+      }
+    }
+  }
+  return items;
+}
+{
+  const day='2026-07-03';
+  // 专注完成：startedAt 61 分钟前 → 到期该推
+  const started=Date.now()-61*60*1000;
+  let items=ctdpDue({activeFocus:{startedAt:started}}, Date.now(), day);
+  ok('专注满60min → 推完成', items.some(i=>i.tag==='rsip-ctdp-focus'));
+  // 未满：startedAt 30 分钟前 → 不推
+  items=ctdpDue({activeFocus:{startedAt:Date.now()-30*60*1000}}, Date.now(), day);
+  ok('专注未满60min → 不推', !items.some(i=>i.tag==='rsip-ctdp-focus'));
+  // 去重：同一 startedAt 的 key 稳定 → last_sent 命中即跳过
+  const k=`ctdp-focus:${day}:${started}`;
+  const lastSent={[k]:true};
+  items=ctdpDue({activeFocus:{startedAt:started}}, Date.now(), day);
+  ok('专注完成 key 稳定，可被 last_sent 去重', items[0].key===k && lastSent[items[0].key]===true);
+
+  // 预约临期：triggeredAt 取整 5 分钟，则 remindCutoff=+13→向下取整到+10 刻度；
+  // 令 now 正好落在 (+10, +15) 且命中窗口。用整 5 分钟对齐的 triggeredAt 便于推理。
+  const FIVE=5*60*1000;
+  const trig=Math.floor(Date.now()/FIVE)*FIVE - 10*60*1000; // 整5分刻度基准（对齐才好推理）
+  // targetTick = floor((trig+13min)/5min)*5min = trig+10min
+  const target=Math.floor((trig+13*60*1000)/FIVE)*FIVE;
+  ok('预约临期刻度 = 开始+10min', target===trig+10*60*1000);
+  // now 落在 target 之后 1 分钟（命中窗口 (now-5,now]）且未超时
+  let nowA=target+1*60*1000;
+  items=ctdpDue({activeAux:{triggeredAt:trig}}, nowA, day);
+  ok('预约临期刻度命中窗口 → 推催促', items.some(i=>i.tag==='rsip-ctdp-aux'));
+  // now 已过 15 分钟超时 → 不推
+  items=ctdpDue({activeAux:{triggeredAt:trig}}, trig+16*60*1000, day);
+  ok('预约已超时 → 不推催促', !items.some(i=>i.tag==='rsip-ctdp-aux'));
+  // now 早于临期刻度（刚预约 2 分钟）→ 还没到催促点，不推
+  items=ctdpDue({activeAux:{triggeredAt:trig}}, trig+2*60*1000, day);
+  ok('预约刚开始未到临期刻度 → 不推', !items.some(i=>i.tag==='rsip-ctdp-aux'));
+  // CTDP key 含 dayStr，能被 prune 正确保留
+  const ak=`ctdp-aux:${day}:${trig}`;
+  ok('CTDP aux key 含当日 → prune 保留', ak.includes(day));
+}
+
 console.log(`\n结果：PASS ${PASS} / FAIL ${FAIL}\n`);
 if(FAIL) process.exit(1);

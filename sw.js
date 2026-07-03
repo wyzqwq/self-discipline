@@ -1,6 +1,6 @@
 // 自控台 Service Worker —— v1.4 阶段二：iOS 授权 + 本地测试通知 + Web Push 接收。
 // 只适配苹果（iOS 16.4+ / 已加主屏幕的 PWA）。
-const SW_VERSION = 'v1.4.3';
+const SW_VERSION = 'v1.5';
 
 // 装完立即接管，不等旧页面全部关闭。
 self.addEventListener('install', (e) => { self.skipWaiting(); });

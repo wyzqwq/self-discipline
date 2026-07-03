@@ -25,6 +25,9 @@ const admin = createClient(SUPABASE_URL, SERVICE_KEY);
 
 const WINDOW_MIN = 5;          // 与 cron 频率一致：命中当前 5 分钟窗口
 const DAY_START_HOUR = 6;      // 与前端一致：早上 6:00 翻天（日本 30h 制）
+const FOCUS_MIN = 60;          // 专注时长（与前端 index.html 对齐）
+const AUX_MIN = 15;            // 预约窗口时长（与前端对齐）
+const AUX_REMIND_BEFORE = 13;  // 预约临期提醒：triggeredAt+此分钟之前的最后一个整5分刻度触发
 
 // 取某时区"现在"的 {hh, mm, minutes, dayStr}（dayStr 用 6:00 逻辑日）
 function nowInTz(tz: string) {
@@ -135,6 +138,43 @@ Deno.serve(async () => {
         body: `你还有 ${pending} 条定式待确认`,
         tag: "rsip-digest",
       });
+    }
+  }
+
+  // CTDP 到点提醒（时间戳是绝对 epoch，直接与 now 比，不走当日分钟数）
+  const ctdp = state.ctdp || {};
+  const now = Date.now();
+
+  // 专注完成：activeFocus 满 60 分钟即到期 → 推一次（已过期也推，App 关着回来才靠它；key 去重）。
+  // 注意：用户在前台时前端 tick 会先判完成并清空 activeFocus 同步上云，这里就看不到、不会重复。
+  const af = ctdp.activeFocus;
+  if (af && typeof af.startedAt === "number" && now >= af.startedAt + FOCUS_MIN * 60 * 1000) {
+    dueItems.push({
+      key: `ctdp-focus:${dayStr}:${af.startedAt}`,
+      title: "专注完成 🎉",
+      body: "一小时专注达成，神圣座位 +1。",
+      tag: "rsip-ctdp-focus",
+    });
+  }
+
+  // 预约临期催促：取 triggeredAt+13min 之前（含）最后一个整 5 分钟刻度作为提醒时刻，
+  // cron 恰在整 5 分钟醒来，命中 (now-5min, now] 窗口即推；且必须尚未超时（now < triggeredAt+15min）。
+  const aa = ctdp.activeAux;
+  if (aa && typeof aa.triggeredAt === "number") {
+    const deadline = aa.triggeredAt + AUX_MIN * 60 * 1000;
+    if (now < deadline) {
+      const remindCutoff = aa.triggeredAt + AUX_REMIND_BEFORE * 60 * 1000;
+      const FIVE = 5 * 60 * 1000; // 向下取整到最近的整 5 分钟 UTC 刻度
+      const targetTick = Math.floor(remindCutoff / FIVE) * FIVE;
+      // 仅当该刻度不早于预约开始，且落在当前扫描窗口 (now-5min, now] 内才推
+      if (targetTick >= aa.triggeredAt && targetTick <= now && targetTick > now - WINDOW_MIN * 60 * 1000) {
+        dueItems.push({
+          key: `ctdp-aux:${dayStr}:${aa.triggeredAt}`,
+          title: "预约就要超时了",
+          body: "快坐上神圣座位，点「开始」进入专注。",
+          tag: "rsip-ctdp-aux",
+        });
+      }
     }
   }
 

@@ -151,17 +151,49 @@ setTimeout(()=>{
   check('lastAddedDate=今天时仍能加根', state().tree.nodes.length===1);
   const rId=state().tree.nodes[0].id;
 
-  // CTDP
+  // CTDP（v1.5：必须先预约，窗口内点开始=一次成功预约并进入专注；专注只能计时满自动完成，中途停止=失败）
+  // 没预约时点开始：不进入专注、不加预约
+  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.aux.count=0; state.ctdp.main.count=0; save(); render();');
+  $('#btnStart').click();
+  check('没预约点开始→不进入专注', !state().ctdp.activeFocus);
+  check('没预约点开始→预约链不加', state().ctdp.aux.count===0);
+  check('没预约时开始按钮隐藏', $('#btnStart').style.display==='none');
+
+  // 正常：打响指预约 → 开始
   $('#btnSnap').click();
   check('aux启动', !!state().ctdp.activeAux);
   check('aux 15:00', $('#auxDisplay').textContent==='15:00');
+  check('预约后开始按钮显示', $('#btnStart').style.display==='');
   $('#btnStart').click();
-  check('focus启动', !!state().ctdp.activeFocus);
-  $('#btnFinish').click();
-  check('主链#1', state().ctdp.main.count===1);
-  check('aux+1', state().ctdp.aux.count===1);
+  check('开始→focus启动', !!state().ctdp.activeFocus);
+  check('开始→预约成功+1', state().ctdp.aux.count===1);
+  check('开始→activeAux清空', !state().ctdp.activeAux);
+  check('开始后无手动完成按钮', !w.document.getElementById('btnFinish'));
+  // 专注中不能再打响指预约
+  check('专注中打响指按钮隐藏', $('#btnSnap').style.display==='none');
+  $('#btnSnap').click();
+  check('专注中点响指→不新建预约', !state().ctdp.activeAux);
+
+  // 中途停止 → 判失败，主链清零，不加节点
   $('#btnClear').click(); $('#confirmOk').click();
-  check('主链清零', state().ctdp.main.count===0);
+  check('中途停止→专注结束', !state().ctdp.activeFocus);
+  check('中途停止→主链清零', state().ctdp.main.count===0);
+  check('中途停止→不算成功专注(history空)', (state().ctdp.main.history||[]).length===0);
+
+  // 计时满自动完成（模拟：startedAt 提前 60 分钟，触发 tick 的自动完成）→ 唯一成功路径
+  $('#btnSnap').click(); $('#btnStart').click();
+  evalGlobal('state.ctdp.activeFocus.startedAt = Date.now() - 61*60*1000; save(); tick();');
+  check('计时满自动完成→主链#1', state().ctdp.main.count===1);
+  check('自动完成→专注结束', !state().ctdp.activeFocus);
+  check('自动完成→history记一次', (state().ctdp.main.history||[]).length===1);
+  // 预约超时：activeAux 存在但已过 15 分钟 → 点开始应清零、不进入专注
+  evalGlobal('state.ctdp.activeAux={triggeredAt: Date.now()-16*60*1000}; state.ctdp.aux.count=3; save(); render();');
+  check('预约超时时开始按钮隐藏', $('#btnStart').style.display==='none');
+  $('#btnStart').click();
+  check('超时点开始→不进入专注', !state().ctdp.activeFocus);
+  check('超时点开始→预约链清零', state().ctdp.aux.count===0);
+  // 复位供后续用例
+  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.aux.count=0; save(); render();');
 
   // fail → cascade（子失败会连带删除；给根加个子再让子失败）
   resetDate();
