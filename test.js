@@ -1,6 +1,10 @@
 const fs=require('fs');
+const path=require('path');
 const {JSDOM}=require('jsdom');
-const html=fs.readFileSync('/sessions/focused-laughing-meitner/mnt/self-discipline/index.html','utf8');
+// 读被测 index.html：优先环境变量 RSIP_HTML，否则读与本脚本同目录的 index.html。
+// 跑法：把仓库版 index.html 和 test.js 都 cp 到 outputs（有 node_modules），再 node test.js。
+const HTML_PATH = process.env.RSIP_HTML || path.join(__dirname, 'index.html');
+const html=fs.readFileSync(HTML_PATH,'utf8');
 const dom=new JSDOM(html,{runScripts:'dangerously',pretendToBeVisual:true,url:'http://localhost/'});
 const w=dom.window;
 function check(label,cond){ console.log((cond?'✓':'✗ FAIL')+' '+label); if(!cond) process.exitCode=1; }
@@ -409,6 +413,67 @@ setTimeout(()=>{
   check('打卡列表不显示该条内容原文', !ciTexts.some(t=>t.includes('进门15分钟内洗澡')));
   check('打卡列表无名字回退内容', ciTexts.some(t=>t.includes('上床不带手机')));
   evalGlobal('state.tree.nodes=[]; save(); render();');
+
+  // ===== v1.6 定式备忘录 =====
+  // migrate 补默认：memos 是数组
+  check('memo: migrate 后 state.memos 是数组', Array.isArray(state().memos));
+  // 打开备忘录 sheet
+  $('#btnMemo').click();
+  check('memo: 点铃铛左侧按钮打开 memoSheet', $('#memoSheet').classList.contains('show'));
+  check('memo: 空态占位文案', $('#memoList .memo-empty')!==null);
+  // 添加一条
+  $('#memoInput').value='想到一个定式：午饭后立刻散步10分钟';
+  $('#memoAddBtn').click();
+  check('memo: 添加后 state.memos 有1条', state().memos.length===1);
+  check('memo: 内容正确', state().memos[0].content.includes('午饭后立刻散步'));
+  check('memo: 有 createdAt', typeof state().memos[0].createdAt==='string' && state().memos[0].createdAt.length>0);
+  check('memo: 列表渲染出1行', $$('#memoList .memo-row').length===1);
+  // 再加一条，新的在上
+  $('#memoInput').value='第二条想法';
+  $('#memoAddBtn').click();
+  check('memo: 现在2条', state().memos.length===2);
+  check('memo: 每行有转正/删除按钮', $$('#memoList [data-promote]').length===2 && $$('#memoList [data-del]').length===2);
+  // 删除一条
+  const delId = state().memos.find(m=>m.content==='第二条想法').id;
+  $(`#memoList [data-del="${delId}"]`).click();
+  check('memo: 删除后剩1条', state().memos.length===1);
+  check('memo: 删除的那条不在了', !state().memos.some(m=>m.content==='第二条想法'));
+  // XSS 转义：内容含尖括号不会注入原始标签
+  evalGlobal(`state.memos.push({id:'mx',content:'<b>x</b>',createdAt:new Date().toISOString()}); save();`);
+  $('#btnMemo').click();
+  check('memo: 内容做了 HTML 转义', $('#memoList').innerHTML.includes('&lt;b&gt;') && !$('#memoList').innerHTML.includes('<b>x</b>'));
+  evalGlobal(`state.memos=state.memos.filter(m=>m.id!=='mx'); save();`);
+
+  // 转正：有名额时点转正 → 关备忘录、开添加面板、内容预填、_promotingMemoId 记录来源
+  evalGlobal('state.tree.nodes=[]; state.tree.lastAddedDate=null; save(); render();');
+  $('#btnMemo').click();
+  const promoteId = state().memos[0].id;
+  $(`#memoList [data-promote="${promoteId}"]`).click();
+  check('memo: 转正后 memoSheet 关闭', !$('#memoSheet').classList.contains('show'));
+  check('memo: 转正后 addSheet 打开', $('#addSheet').classList.contains('show'));
+  check('memo: 转正后内容预填进 addContent', $('#addContent').value.includes('午饭后立刻散步'));
+  check('memo: _promotingMemoId 记录了来源', evalGlobal('_promotingMemoId')===promoteId);
+  check('memo: 转正未加入前备忘录仍在(1条)', state().memos.length===1);
+  // 加入成功 → 备忘条被移除
+  $('#addParent').value='';   // 作为根加入
+  $('#addConfirm').click();
+  check('memo: 加入后定式树+1', state().tree.nodes.length===1);
+  check('memo: 加入成功后对应备忘条被移除', state().memos.length===0);
+  check('memo: 加入后 _promotingMemoId 清空', evalGlobal('_promotingMemoId')===null);
+
+  // 转正后没加、改去正常打开添加面板 → 不误删备忘条
+  evalGlobal('state.tree.nodes=[]; state.tree.lastAddedDate=null; state.memos=[{id:"keep1",content:"别误删我",createdAt:new Date().toISOString()}]; save(); render();');
+  $('#btnMemo').click();
+  $(`#memoList [data-promote="keep1"]`).click();
+  check('memo: 转正后 _promotingMemoId=keep1', evalGlobal('_promotingMemoId')==='keep1');
+  $('#addCancel').click();               // 放弃这次转正
+  $('#fabAdd').click();                  // 重新正常打开添加面板
+  check('memo: 重开添加面板后 _promotingMemoId 已清空', evalGlobal('_promotingMemoId')===null);
+  $('#addParent').value='';
+  $('#addContent').value='另外手动加的定式';
+  $('#addConfirm').click();
+  check('memo: 手动加别的定式不会误删备忘条', state().memos.length===1 && state().memos[0].id==='keep1');
+  evalGlobal('state.tree.nodes=[]; state.memos=[]; save(); render();');
 
   console.log('\n✅ 全部通过');
   process.exit(process.exitCode||0);

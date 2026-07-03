@@ -216,6 +216,14 @@
   .field .with-ai{position:relative}
   #addContent{padding-right:88px}
   #addName{padding-right:66px}
+  #memoInput{padding-right:58px}
+  #memoList .memo-row{display:flex;align-items:center;gap:8px;padding:10px 12px;background:var(--bg-soft);border-radius:11px;margin-bottom:8px}
+  #memoList .memo-row .memo-text{flex:1;font-size:13.5px;color:var(--ink);line-height:1.5;word-break:break-word}
+  #memoList .memo-row .memo-act{font-size:12px;padding:5px 10px;border-radius:8px;border:none;cursor:pointer;font-family:var(--sans);white-space:nowrap}
+  #memoList .memo-row .memo-promote{background:var(--sage-soft);color:var(--sage-deep)}
+  #memoList .memo-row .memo-del{background:var(--clay-soft);color:var(--clay)}
+  #memoList .memo-row .memo-act:active{transform:scale(.94)}
+  #memoList .memo-empty{font-size:13px;color:var(--ink-soft);padding:14px 4px;text-align:center;line-height:1.6}
   .field .ai-tag{
     position:absolute;right:8px;top:50%;transform:translateY(-50%);font-size:11px;
     background:var(--sage-soft);color:var(--sage-deep);padding:4px 9px;border-radius:7px;cursor:pointer;border:none;font-family:var(--sans)
@@ -295,6 +303,9 @@
       <span>自控台<span class="sub">· 定式与专注</span><span class="sync-dot" id="syncDot"></span></span>
     </div>
     <div class="tools">
+      <button class="icon-btn" id="btnMemo" title="定式备忘录">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M8 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V5a2 2 0 0 0-2-2h-2"/><path d="M8 2h8v4H8z"/><path d="M8 11h6M8 15h4"/></svg>
+      </button>
       <button class="icon-btn" id="btnNotify" title="提醒设置">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9"/><path d="M13.7 21a2 2 0 0 1-3.4 0"/></svg>
       </button>
@@ -540,6 +551,25 @@
   </div>
 </div>
 
+<div class="sheet" id="memoSheet">
+  <div class="grip"></div>
+  <h3>定式备忘录</h3>
+  <p class="desc">一天只能新增一个定式。临时想到的先扔进这里暂存，等有名额了再「转正」为正式定式，别让灵感过夜就忘了。</p>
+  <div class="field">
+    <div class="with-ai">
+      <input type="text" id="memoInput" placeholder="随手记下一个想到的定式想法…">
+      <button class="ai-tag" id="memoAddBtn">添加</button>
+    </div>
+  </div>
+  <div class="field">
+    <label>已暂存 <span class="opt">（点「转正」填入添加面板，不占每日名额）</span></label>
+    <div id="memoList"></div>
+  </div>
+  <div class="btn-row">
+    <button class="btn ghost" id="memoClose">关闭</button>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 <input type="file" id="fileInput" accept="application/json" style="display:none">
 
@@ -572,7 +602,8 @@ function defaultState(){
     version:1, created:new Date().toISOString(),
     tree:{ nodes:[], lastAddedDate:null },
     ctdp:{ main:{count:0, history:[], breaks:[]}, aux:{count:0}, activeFocus:null, activeAux:null },
-    notify:{ dailyDigestAt:'' }   // 每日汇总提醒时间 'HH:MM'，空=不开汇总
+    notify:{ dailyDigestAt:'' },  // 每日汇总提醒时间 'HH:MM'，空=不开汇总
+    memos:[]                      // v1.6 定式备忘录：临时想法暂存
   };
 }
 function migrate(s){
@@ -586,6 +617,7 @@ function migrate(s){
   if(!s.notify) s.notify = {dailyDigestAt:'', tz:''};        // v1.4 提醒：补全局汇总时间
   if(s.notify.dailyDigestAt===undefined) s.notify.dailyDigestAt='';
   if(s.notify.tz===undefined) s.notify.tz='';                // v1.4 阶段二：用户时区，服务端比对本地时钟用
+  if(!Array.isArray(s.memos)) s.memos = [];                  // v1.6 定式备忘录：临时想法暂存 [{id,content,createdAt}]，不占每日名额
   // 老数据：节点补 name 字段（空串），保留旧的 problem/intervention 不再展示
   (s.tree.nodes||[]).forEach(n=>{
     if(n.name===undefined) n.name='';
@@ -1383,6 +1415,7 @@ function openAddSheet(parentId){
   }
   // 退出重命名模式：还原标题/描述/按钮、解锁全表单
   renameId = null;
+  _promotingMemoId = null;   // v1.6：正常打开添加面板即清除"转正来源"（防转正后没加、改加别的导致备忘被误删）
   setRenameLock(false);
   document.getElementById('addTitle').textContent = '新增定式';
   document.getElementById('addDesc').textContent = '针对一个反复出现的负面状态，回溯到自由意志还能干预的节点，写下你的局部最优解。';
@@ -1505,6 +1538,8 @@ document.getElementById('addConfirm').addEventListener('click', ()=>{
   N().push(node);
   // 只有子定式消耗每日名额；根定式不占
   if(parentId){ state.tree.lastAddedDate = todayStr(); }
+  // v1.6：若本次是从备忘录「转正」而来，加入成功后移除对应备忘条
+  if(_promotingMemoId){ state.memos = (state.memos||[]).filter(m=>m.id!==_promotingMemoId); _promotingMemoId=null; }
   save(); render(); closeSheets();
   toast(parentId ? '已加入定式树' : '已设定根定式（全树管理要求）');
 });
@@ -1853,6 +1888,61 @@ document.getElementById('btnNotify').addEventListener('click', ()=>{
   updateNotifyUI();
   setTimePicker('digest', (state.notify && state.notify.dailyDigestAt) || '');
   openSheet('notifySheet');
+});
+
+// ==== v1.6 定式备忘录：临时想法暂存，不占每日名额 ====
+let _promotingMemoId = null;   // 记录本次添加是从哪条备忘录「转正」而来（加入成功后删该条）
+function escHtml(s){ return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function renderMemos(){
+  const box=document.getElementById('memoList');
+  const memos=state.memos||[];
+  if(!memos.length){ box.innerHTML='<div class="memo-empty">还没有暂存的想法。<br>随手记下临时想到的定式，等有名额了再转正。</div>'; return; }
+  const rows=[...memos].sort((a,b)=>(b.createdAt||'').localeCompare(a.createdAt||''));  // 新的在上
+  box.innerHTML=rows.map(m=>`<div class="memo-row" data-id="${m.id}">
+      <span class="memo-text">${escHtml(m.content)}</span>
+      <button class="memo-act memo-promote" data-promote="${m.id}">转正</button>
+      <button class="memo-act memo-del" data-del="${m.id}">删除</button>
+    </div>`).join('');
+}
+function addMemo(content){
+  content=(content||'').trim();
+  if(!content){ toast('请先写点想法', true); return; }
+  if(!Array.isArray(state.memos)) state.memos=[];
+  state.memos.push({ id: uid(), content, createdAt: new Date().toISOString() });
+  save(); renderMemos();
+  toast('已存入备忘录');
+}
+function delMemo(id){
+  state.memos=(state.memos||[]).filter(m=>m.id!==id);
+  save(); renderMemos();
+}
+function promoteMemo(id){
+  const m=(state.memos||[]).find(x=>x.id===id); if(!m) return;
+  if(!canAddToday()){ toast('今天已经新增过定式了，明天再来', true); return; }  // 有名额才转正
+  closeSheets();
+  openAddSheet('');                 // openAddSheet 会清空 addContent 和 _promotingMemoId
+  _promotingMemoId = id;            // 再标记来源
+  const inp=document.getElementById('addContent');
+  inp.value = m.content;            // 预填内容，其余（挂载/打卡时机/名字）用户自己选
+  setTimeout(()=>{ inp.focus(); inp.setSelectionRange(inp.value.length, inp.value.length); }, 320);
+}
+document.getElementById('btnMemo').addEventListener('click', ()=>{
+  renderMemos();
+  document.getElementById('memoInput').value='';
+  openSheet('memoSheet');
+});
+document.getElementById('memoAddBtn').addEventListener('click', ()=>{
+  const inp=document.getElementById('memoInput');
+  addMemo(inp.value);
+  inp.value=''; inp.focus();
+});
+document.getElementById('memoInput').addEventListener('keydown', e=>{
+  if(e.key==='Enter'){ e.preventDefault(); document.getElementById('memoAddBtn').click(); }
+});
+document.getElementById('memoClose').addEventListener('click', closeSheets);
+document.getElementById('memoList').addEventListener('click', e=>{
+  const pb=e.target.closest('[data-promote]'); if(pb){ promoteMemo(pb.getAttribute('data-promote')); return; }
+  const db=e.target.closest('[data-del]'); if(db){ delMemo(db.getAttribute('data-del')); return; }
 });
 // 每日汇总开关：开启即自动申请授权
 document.getElementById('digestOn').addEventListener('change', ()=>{
