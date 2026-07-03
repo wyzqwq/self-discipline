@@ -1112,6 +1112,8 @@ function vcTicks(spanMs){
   if(spanMs<=70*D)  return {step:7*D,  fmt:d=>`${d.getMonth()+1}/${d.getDate()}`};
   return {step:30*D, fmt:d=>`${d.getMonth()+1}月`};
 }
+let _vcOpenK=null;          // 当前打开的价值曲线气泡对应的链序号 k（null=未开），重绘后据此恢复
+let _vcDocClickBound=false; // 页面级“点任意处关闭气泡”监听只绑一次
 function renderValueCurve(){
   const host = document.getElementById('vcChart');
   const lossEl = document.getElementById('vcLoss');
@@ -1189,37 +1191,52 @@ function renderValueCurve(){
       ${dotsSvg}${endDot}${hitSvg}
     </svg>`;
 
-  // 点击圆点 → 气泡显示开始时间；点空白处或再次点击关闭
+  // 点击圆点 → 气泡显示开始时间；再次点同一点 / 点页面任意处关闭。
+  // 气泡打开状态记在模块级 _vcOpenK，tick 每 0.5s 重绘 SVG 后据此恢复，避免气泡半秒被抹掉。
   const scale = (host.clientWidth||W) / W;   // viewBox→像素缩放（横向填满，纵向按 svg 高度）
   const yScale = (host.clientHeight||Hh) / Hh;
   function fmtStart(ms){ const d=new Date(ms); const p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
   function closeTip(){ const t=host.querySelector('.vc-tip'); if(t) t.remove(); }
+  // 按 data-k 画气泡（点击、重绘恢复共用）
+  function drawTipByK(kk){
+    const h = host.querySelector(`.vc-hit[data-k="${kk}"]`);
+    if(!h) return;
+    closeTip();
+    const tip = document.createElement('div');
+    tip.className='vc-tip'; tip.dataset.k=kk;
+    tip.innerHTML = `#${kk} · 开始 <b>${fmtStart(+h.getAttribute('data-start'))}</b>`;
+    const dotX = parseFloat(h.getAttribute('data-x'))*scale;
+    tip.style.top = (parseFloat(h.getAttribute('data-y'))*yScale - 6)+'px';
+    tip.style.left = '0px'; tip.style.visibility='hidden';   // 先放进去量宽度
+    host.appendChild(tip);
+    const tw = tip.offsetWidth, hostW = host.clientWidth, pad = 4;
+    // 气泡左边缘钳制在容器内（默认以圆点居中，超出则贴边）
+    let left = dotX - tw/2;
+    left = Math.max(pad, Math.min(left, hostW - tw - pad));
+    tip.style.left = left+'px';
+    // 箭头指回真正的圆点（相对气泡左边缘），也钳制在气泡内避免脱出圆角
+    const arrow = Math.max(9, Math.min(dotX - left, tw - 9));
+    tip.style.setProperty('--arrow', arrow+'px');
+    tip.style.visibility='';
+  }
   host.querySelectorAll('.vc-hit').forEach(h=>{
     h.addEventListener('click', (ev)=>{
-      ev.stopPropagation();
-      const existing = host.querySelector('.vc-tip');
+      ev.stopPropagation();   // 挡住冒泡，避免触发下面“点页面任意处关闭”
       const kk = h.getAttribute('data-k');
-      closeTip();
-      if(existing && existing.dataset.k===kk) return;  // 再次点同一点 → 关闭
-      const tip = document.createElement('div');
-      tip.className='vc-tip'; tip.dataset.k=kk;
-      tip.innerHTML = `#${kk} · 开始 <b>${fmtStart(+h.getAttribute('data-start'))}</b>`;
-      const dotX = parseFloat(h.getAttribute('data-x'))*scale;
-      tip.style.top = (parseFloat(h.getAttribute('data-y'))*yScale - 6)+'px';
-      tip.style.left = '0px'; tip.style.visibility='hidden';   // 先放进去量宽度
-      host.appendChild(tip);
-      const tw = tip.offsetWidth, hostW = host.clientWidth, pad = 4;
-      // 气泡左边缘钳制在容器内（默认以圆点居中，超出则贴边）
-      let left = dotX - tw/2;
-      left = Math.max(pad, Math.min(left, hostW - tw - pad));
-      tip.style.left = left+'px';
-      // 箭头指回真正的圆点（相对气泡左边缘），也钳制在气泡内避免脱出圆角
-      const arrow = Math.max(9, Math.min(dotX - left, tw - 9));
-      tip.style.setProperty('--arrow', arrow+'px');
-      tip.style.visibility='';
+      if(_vcOpenK===kk){ _vcOpenK=null; closeTip(); return; }  // 再次点同一点 → 关闭
+      _vcOpenK = kk;
+      drawTipByK(kk);
     });
   });
-  host.addEventListener('click', closeTip);
+  // 重绘后恢复上次打开的气泡（tick 每 0.5s 重建 SVG，靠这行让气泡持续显示）
+  if(_vcOpenK!=null) drawTipByK(_vcOpenK);
+  // 点页面任意处关闭气泡（圆点自己 stopPropagation 不受影响）。只绑一次。
+  if(!_vcDocClickBound){
+    _vcDocClickBound=true;
+    document.addEventListener('click', ()=>{
+      if(_vcOpenK!=null){ _vcOpenK=null; const t=document.querySelector('#vcChart .vc-tip'); if(t) t.remove(); }
+    });
+  }
 }
 
 /* =========================================================

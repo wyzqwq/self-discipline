@@ -256,9 +256,21 @@ setTimeout(()=>{
   // 边缘防切：气泡设置了箭头位置变量、left 不为负（钳制在容器内）
   check('气泡设置箭头位置变量', tip && tip.style.getPropertyValue('--arrow')!=='');
   check('气泡 left 非负(钳制在容器内)', tip && parseFloat(tip.style.left)>=0);
+  // v1.5.3：气泡打开后重绘（模拟 tick 每 0.5s 重建 SVG）气泡应被恢复、不消失
+  evalGlobal('renderCTDP()');
+  const tipAfter = $('#vcChart .vc-tip');
+  check('重绘后气泡仍在(不半秒消失)', !!tipAfter && tipAfter.dataset.k==='2');
   // 再次点同一点 → 关闭
   hits[1].dispatchEvent(new w.Event('click',{bubbles:true}));
   check('再次点同一点关闭气泡', !$('#vcChart .vc-tip'));
+  // v1.5.3：关闭后重绘不应把气泡带回来
+  evalGlobal('renderCTDP()');
+  check('关闭后重绘不复现气泡', !$('#vcChart .vc-tip'));
+  // v1.5.3：点页面任意处（document）关闭已打开的气泡
+  $$('#vcChart .vc-hit')[0].dispatchEvent(new w.Event('click',{bubbles:true}));
+  check('重新点开另一点', !!$('#vcChart .vc-tip'));
+  w.document.body.dispatchEvent(new w.Event('click',{bubbles:true}));
+  check('点页面任意处关闭气泡', !$('#vcChart .vc-tip'));
   // 复位
   evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.main.breaks=[]; state.ctdp.aux.count=0; save(); render();');
 
