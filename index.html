@@ -281,8 +281,8 @@
   .vc-loss{margin-top:12px;font-size:12.5px;color:var(--clay);text-align:center;min-height:18px;font-weight:500}
   .vc-loss b{font-family:var(--mono);font-weight:600}
   .vc-hit{cursor:pointer}
-  .vc-tip{position:absolute;transform:translate(-50%,-100%);background:var(--sage-deep);color:#fff;font-size:11px;line-height:1.4;padding:5px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.14);z-index:2}
-  .vc-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--sage-deep)}
+  .vc-tip{position:absolute;transform:translateY(-100%);background:var(--sage-deep);color:#fff;font-size:11px;line-height:1.4;padding:5px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.14);z-index:2}
+  .vc-tip::after{content:"";position:absolute;left:var(--arrow,50%);top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--sage-deep)}
   .vc-tip b{font-family:var(--mono);font-weight:600}
 </style>
 </head>
@@ -636,6 +636,7 @@ if(!syncCfg.url || !syncCfg.key){
 let pushTimer=null;
 let lastPushedTs=0;
 let isSyncing=false;
+let _syncConflictPending=false;   // 冲突弹窗未决期间禁止任何 push（防点击前抢先上传本地脏数据）
 
 function loadSyncCfg(){
   try{ return JSON.parse(localStorage.getItem(SYNC_CFG_KEY))||{}; }catch(e){ return {}; }
@@ -725,7 +726,7 @@ async function syncPull(){
 }
 
 // 冲突弹窗：本地 vs 云端摘要，让用户选“保留本地”或“用云端覆盖”
-let _syncConflictPending=false;
+// （_syncConflictPending 声明已上移到 sync 区顶部）
 function stateBrief(s){
   const nodes=((s&&s.tree)||{}).nodes||[];
   const m=((s&&s.ctdp)||{}).main||{};
@@ -755,6 +756,7 @@ function promptSyncConflict(incoming, remoteTs, reasons){
 // push: 推本地到云端
 async function syncPush(){
   if(!syncCfg.url||!syncCfg.key) return;
+  if(_syncConflictPending) return;   // 冲突弹窗未决 → 绝不上传，等用户先选（防止本地脏数据抢先成为云端最新）
   if(isSyncing) return;
   isSyncing=true; setSyncDot('busy');
   try{
@@ -780,8 +782,8 @@ async function initSync(){
   if(syncCfg.url&&syncCfg.key){
     setSyncDot('busy');
     await syncPull();
-    // 拉完若本地比云端新（含 _ts），推一次
-    if((state._ts||0)>lastPushedTs){ schedulePush(); }
+    // 拉完若本地比云端新（含 _ts），推一次；但冲突弹窗未决时不推（等用户先选，别把旧本地当最新顶上去）
+    if(!_syncConflictPending && (state._ts||0)>lastPushedTs){ schedulePush(); }
   }
 }
 
@@ -1202,9 +1204,19 @@ function renderValueCurve(){
       const tip = document.createElement('div');
       tip.className='vc-tip'; tip.dataset.k=kk;
       tip.innerHTML = `#${kk} · 开始 <b>${fmtStart(+h.getAttribute('data-start'))}</b>`;
-      tip.style.left = (parseFloat(h.getAttribute('data-x'))*scale)+'px';
-      tip.style.top  = (parseFloat(h.getAttribute('data-y'))*yScale - 6)+'px';
+      const dotX = parseFloat(h.getAttribute('data-x'))*scale;
+      tip.style.top = (parseFloat(h.getAttribute('data-y'))*yScale - 6)+'px';
+      tip.style.left = '0px'; tip.style.visibility='hidden';   // 先放进去量宽度
       host.appendChild(tip);
+      const tw = tip.offsetWidth, hostW = host.clientWidth, pad = 4;
+      // 气泡左边缘钳制在容器内（默认以圆点居中，超出则贴边）
+      let left = dotX - tw/2;
+      left = Math.max(pad, Math.min(left, hostW - tw - pad));
+      tip.style.left = left+'px';
+      // 箭头指回真正的圆点（相对气泡左边缘），也钳制在气泡内避免脱出圆角
+      const arrow = Math.max(9, Math.min(dotX - left, tw - 9));
+      tip.style.setProperty('--arrow', arrow+'px');
+      tip.style.visibility='';
     });
   });
   host.addEventListener('click', closeTip);

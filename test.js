@@ -253,6 +253,9 @@ setTimeout(()=>{
   const p2=n=>String(n).padStart(2,'0');
   const expHM = `${p2(expStart.getHours())}:${p2(expStart.getMinutes())}`;
   check('气泡含开始时间(完成−60min)', tip && tip.textContent.includes(expHM));
+  // 边缘防切：气泡设置了箭头位置变量、left 不为负（钳制在容器内）
+  check('气泡设置箭头位置变量', tip && tip.style.getPropertyValue('--arrow')!=='');
+  check('气泡 left 非负(钳制在容器内)', tip && parseFloat(tip.style.left)>=0);
   // 再次点同一点 → 关闭
   hits[1].dispatchEvent(new w.Event('click',{bubbles:true}));
   check('再次点同一点关闭气泡', !$('#vcChart .vc-tip'));
@@ -309,6 +312,24 @@ setTimeout(()=>{
   check('无自定义时确认按钮复位为“确认”', $('#confirmOk').textContent==='确认');
   $('#confirmOk').click();
   check('确认触发 cb 回调', w.__ok2===1);
+
+  // ===== v1.5.2 冲突弹窗未决期间禁止 push（防点击前抢先上传本地脏数据）=====
+  // 打桩 fetch 记录 PATCH（push）次数
+  evalGlobal(`
+    window.__patchCount=0;
+    window.fetch=function(u,opts){
+      if(opts && opts.method==='PATCH') window.__patchCount++;
+      return Promise.resolve({ok:true, json:()=>Promise.resolve([]) });
+    };
+  `);
+  // 弹窗未决 → syncPush 直接返回，不发 PATCH
+  evalGlobal('_syncConflictPending=true; window.__patchCount=0;');
+  evalGlobal('syncPush()');
+  check('冲突弹窗未决时 syncPush 不上传', w.__patchCount===0);
+  // 用户做出选择后解除 → syncPush 恢复上传（fetch 在首个 await 前已被同步调用，计数即时可见）
+  evalGlobal('_syncConflictPending=false; isSyncing=false; window.__patchCount=0;');
+  evalGlobal('syncPush()');
+  check('弹窗解除后 syncPush 恢复上传', w.__patchCount===1);
 
   // fail → cascade（子失败会连带删除；给根加个子再让子失败）
   resetDate();
