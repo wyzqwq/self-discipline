@@ -864,7 +864,8 @@ function refundDailyIfContains(removedNodes){
 // 桌面 Cowork 内置 askClaude；否则只要配了 Supabase 就走云函数中转（手机端也能用 AI）
 function hasCowork(){ return !!(window.cowork && typeof window.cowork.askClaude==='function'); }
 function hasAgent(){ return hasCowork() || !!(syncCfg && syncCfg.url && syncCfg.key); }
-async function askClaude(prompt, data){
+async function askClaude(prompt, data, opts){
+  opts = opts || {};
   // 优先桌面 Cowork
   if(hasCowork()){
     try{
@@ -875,7 +876,7 @@ async function askClaude(prompt, data){
       return JSON.stringify(r);
     }catch(e){ /* 落到云函数 */ }
   }
-  // Supabase 云函数中转（火山方舟）
+  // Supabase 云函数中转（DeepSeek）。think=true 走思考档（诊断用），否则快档（起名/建议）
   if(syncCfg && syncCfg.url && syncCfg.key){
     try{
       const base = syncCfg.url.replace(/\/$/,'');
@@ -886,11 +887,15 @@ async function askClaude(prompt, data){
           'apikey':syncCfg.key,
           'Authorization':'Bearer '+syncCfg.key
         },
-        body: JSON.stringify({prompt})
+        body: JSON.stringify({prompt, think: !!opts.think})
       });
-      const j = await r.json();
-      return (j && j.text) ? j.text : '';
-    }catch(e){ return ''; }
+      const j = await r.json().catch(()=>({}));
+      if(j && j.text) return j.text;
+      // 错误不再静默吞掉：把真实原因冒泡给用户，便于定位（超时/截断/上游报错）
+      const reason = (j && (j.error || j.finish_reason)) || ('HTTP '+r.status);
+      toast('AI 调用失败：'+reason, true);
+      return '';
+    }catch(e){ toast('AI 调用失败：'+(e && e.message || e), true); return ''; }
   }
   return '';
 }
@@ -1638,7 +1643,7 @@ ${listBrief}
 内容|挂载编号|理由
 内容|挂载编号|理由
 内容|挂载编号|理由`;
-  const res = await askClaude(prompt, []);
+  const res = await askClaude(prompt, [], {think:true});
   btn.textContent=old; btn.disabled=false;
   diagOptions = parseDiag(res, nodes);
   if(!diagOptions.length){ toast('AI 未返回可用方案', true); return; }
