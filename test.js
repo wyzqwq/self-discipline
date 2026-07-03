@@ -193,7 +193,122 @@ setTimeout(()=>{
   check('超时点开始→不进入专注', !state().ctdp.activeFocus);
   check('超时点开始→预约链清零', state().ctdp.aux.count===0);
   // 复位供后续用例
-  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.aux.count=0; save(); render();');
+  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.main.breaks=[]; state.ctdp.aux.count=0; save(); render();');
+
+  // ===== v1.5.1 价值曲线 =====
+  // chainValue：单调递增 + 凸（每步增量越来越大）；const 声明用 evalGlobal 读
+  check('chainValue(0)=0', evalGlobal('chainValue(0)')===0);
+  check('chainValue 单调增', evalGlobal('chainValue(1)<chainValue(2) && chainValue(2)<chainValue(3)'));
+  check('chainValue 凸(增量递增)', evalGlobal('(chainValue(3)-chainValue(2)) > (chainValue(2)-chainValue(1))'));
+  check('chainValue(1)=1', evalGlobal('Math.abs(chainValue(1)-1)<1e-9'));
+  // buildValueSeries：成功升值 + 断链归零，按时间归并
+  evalGlobal(`state.ctdp.main.history=['2026-07-01T08:00:00Z','2026-07-01T10:00:00Z','2026-07-02T09:00:00Z']; state.ctdp.main.breaks=['2026-07-01T12:00:00Z']; save();`);
+  const series = w.buildValueSeries();
+  check('回放点数=成功3+断链1', series.length===4);
+  check('第1点 k=1', series[0].k===1);
+  check('第2点 k=2', series[1].k===2);
+  check('断链点 k=0 value=0', series[2].k===0 && series[2].value===0);
+  check('断链后重新从 k=1 起', series[3].k===1);
+  check('断链点按时间插在成功之间', series[2].t < series[3].t && series[2].t > series[1].t);
+  // 同一时刻：先升值后断链
+  evalGlobal(`state.ctdp.main.history=['2026-07-01T08:00:00Z']; state.ctdp.main.breaks=['2026-07-01T08:00:00Z']; save();`);
+  const tie = w.buildValueSeries();
+  check('同刻先升后断：末点归零', tie[tie.length-1].value===0);
+  // 空数据：曲线区显示占位、不报错
+  evalGlobal('state.ctdp.main.history=[]; state.ctdp.main.breaks=[]; state.ctdp.main.count=0; save(); renderCTDP();');
+  check('空数据显示占位', !!$('.vc-empty'));
+  check('空数据无损失预览', $('#vcLoss').textContent==='');
+  // 断链损失预览：有链时显示当前 #N 与价值数字
+  evalGlobal('state.ctdp.main.count=5; save(); renderCTDP();');
+  check('损失预览含 #5', $('#vcLoss').textContent.includes('#5'));
+  check('损失预览含价值数字', /\d/.test($('#vcLoss').textContent));
+  // btnClear 记断链：主链>0 放弃会 push 一条 break 并清零
+  evalGlobal('state.ctdp.main.count=3; state.ctdp.main.breaks=[]; state.ctdp.activeFocus={startedAt:Date.now()}; save(); renderCTDP();');
+  $('#btnClear').click(); $('#confirmOk').click();
+  check('btnClear 记一条断链', state().ctdp.main.breaks.length===1);
+  check('btnClear 后主链清零', state().ctdp.main.count===0);
+  // 主链=0 放弃不记断链（没有链可断）
+  evalGlobal('state.ctdp.main.count=0; state.ctdp.main.breaks=[]; state.ctdp.activeFocus={startedAt:Date.now()}; save(); renderCTDP();');
+  $('#btnClear').click(); $('#confirmOk').click();
+  check('主链0放弃不记断链', state().ctdp.main.breaks.length===0);
+  // 复位
+  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.main.breaks=[]; state.ctdp.aux.count=0; save(); render();');
+
+  // ===== v1.5.1 价值曲线可点圆点·显示专注开始时间 =====
+  // 两次成功专注（history 存的是完成时间），画曲线后应有 2 个可点热区
+  evalGlobal(`state.ctdp.main.count=2; state.ctdp.main.history=['2026-07-01T09:00:00.000Z','2026-07-02T14:00:00.000Z']; state.ctdp.main.breaks=[]; save(); renderCTDP();`);
+  const hits = $$('#vcChart .vc-hit');
+  check('每个成功点生成一个可点热区', hits.length===2);
+  check('热区带 data-k 链序号', hits[0].getAttribute('data-k')==='1' && hits[1].getAttribute('data-k')==='2');
+  // data-start = 完成时间 − 60min（FOCUS_MIN）
+  const start0 = +hits[0].getAttribute('data-start');
+  check('开始时间=完成时间−60分钟', start0 === new Date('2026-07-01T09:00:00.000Z').getTime() - 60*60*1000);
+  // 点击热区 → 出现气泡，含 #N 与开始时间
+  hits[1].dispatchEvent(new w.Event('click',{bubbles:true}));
+  const tip = $('#vcChart .vc-tip');
+  check('点击圆点出现气泡', !!tip);
+  check('气泡含链序号 #2', tip && tip.textContent.includes('#2'));
+  // 期望开始时间按本地时区从"完成−60min"格式化（避免硬编码时区）
+  const expStart = new Date(new Date('2026-07-02T14:00:00.000Z').getTime() - 60*60*1000);
+  const p2=n=>String(n).padStart(2,'0');
+  const expHM = `${p2(expStart.getHours())}:${p2(expStart.getMinutes())}`;
+  check('气泡含开始时间(完成−60min)', tip && tip.textContent.includes(expHM));
+  // 再次点同一点 → 关闭
+  hits[1].dispatchEvent(new w.Event('click',{bubbles:true}));
+  check('再次点同一点关闭气泡', !$('#vcChart .vc-tip'));
+  // 复位
+  evalGlobal('state.ctdp.activeAux=null; state.ctdp.activeFocus=null; state.ctdp.main.count=0; state.ctdp.main.history=[]; state.ctdp.main.breaks=[]; state.ctdp.aux.count=0; save(); render();');
+
+  // ===== v1.5.1 同步冲突确认覆盖 =====
+  // isPrefix：base 是 arr 前缀（只在末尾追加）才 true
+  check('isPrefix 空base', w.isPrefix([], ['a','b']));
+  check('isPrefix 追加', w.isPrefix(['a'], ['a','b']));
+  check('isPrefix 相等', w.isPrefix(['a','b'], ['a','b']));
+  check('isPrefix 变短→false', !w.isPrefix(['a','b'], ['a']));
+  check('isPrefix 改写→false', !w.isPrefix(['a','b'], ['x','b']));
+  // findSyncConflicts：只有“改写本地已有”才算冲突
+  const L = {tree:{nodes:[
+      {id:'a',content:'C1',name:'N1',parentId:null,checkMode:'sameday',remindAt:'',log:{'2026-07-01':'success'}},
+      {id:'b',content:'C2',name:'',parentId:'a',checkMode:'sameday',remindAt:'',log:{}}
+    ]}, ctdp:{main:{count:2,history:['t1','t2'],breaks:[]}}};
+  // 1) 完全相同 → 无冲突
+  check('相同数据无冲突', w.findSyncConflicts(L, JSON.parse(JSON.stringify(L))).length===0);
+  // 2) 云端多一个新定式 + 主链末尾追加 → 无冲突（纯新增）
+  const rAdd=JSON.parse(JSON.stringify(L));
+  rAdd.tree.nodes.push({id:'c',content:'C3',name:'',parentId:'a',checkMode:'sameday',remindAt:'',log:{}});
+  rAdd.ctdp.main.history.push('t3'); rAdd.ctdp.main.count=3;
+  check('云端纯新增(加定式+主链变长)无冲突', w.findSyncConflicts(L, rAdd).length===0);
+  // 3) 云端删了本地定式 b → 冲突
+  const rDel=JSON.parse(JSON.stringify(L)); rDel.tree.nodes=rDel.tree.nodes.filter(n=>n.id!=='b');
+  check('云端删本地定式→冲突', w.findSyncConflicts(L, rDel).length>0);
+  // 4) 云端改了本地定式内容 → 冲突
+  const rEdit=JSON.parse(JSON.stringify(L)); rEdit.tree.nodes[0].content='改了';
+  check('云端改本地定式→冲突', w.findSyncConflicts(L, rEdit).length>0);
+  // 5) 云端改了本地打卡 → 冲突
+  const rLog=JSON.parse(JSON.stringify(L)); rLog.tree.nodes[0].log={'2026-07-01':'fail'};
+  check('云端改本地打卡→冲突', w.findSyncConflicts(L, rLog).length>0);
+  // 6) 云端主链记录被改写（非追加）→ 冲突
+  const rHist=JSON.parse(JSON.stringify(L)); rHist.ctdp.main.history=['x','t2'];
+  check('云端改写主链记录→冲突', w.findSyncConflicts(L, rHist).length>0);
+  // 7) 本地空 → 云端任何数据都无冲突（首次同步/新设备）
+  const empty={tree:{nodes:[]}, ctdp:{main:{count:0,history:[],breaks:[]}}};
+  check('本地空→无冲突', w.findSyncConflicts(empty, rAdd).length===0);
+  // stateBrief：摘要含定式数/主链/打卡
+  const brief=w.stateBrief(L);
+  check('stateBrief 含定式数', brief.includes('2 条定式'));
+  check('stateBrief 含主链', brief.includes('#2'));
+  check('stateBrief 含打卡次数', brief.includes('打卡 1'));
+  // confirmAct 支持 onCancel + 自定义按钮文案
+  evalGlobal('window.__ok2=0;window.__cancel=0;confirmAct("T","D",()=>{window.__ok=1},()=>{window.__cancel=1},"覆盖","保留")');
+  check('确认弹窗打开', $('#confirmSheet').classList.contains('show'));
+  check('确认按钮自定义文案', $('#confirmOk').textContent==='覆盖');
+  check('取消按钮自定义文案', $('#confirmCancel').textContent==='保留');
+  $('#confirmCancel').click();
+  check('取消触发 onCancel 回调', w.__cancel===1);
+  evalGlobal('confirmAct("T","D",()=>{window.__ok2=1})');
+  check('无自定义时确认按钮复位为“确认”', $('#confirmOk').textContent==='确认');
+  $('#confirmOk').click();
+  check('确认触发 cb 回调', w.__ok2===1);
 
   // fail → cascade（子失败会连带删除；给根加个子再让子失败）
   resetDate();

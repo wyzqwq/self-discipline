@@ -204,7 +204,7 @@
   .sheet.show{transform:none}
   .sheet .grip{width:38px;height:4px;border-radius:2px;background:var(--line);margin:6px auto 16px}
   .sheet h3{margin:0 0 4px;font-size:17px;font-weight:600}
-  .sheet .desc{font-size:12.5px;color:var(--ink-faint);margin:0 0 16px;line-height:1.6}
+  .sheet .desc{font-size:12.5px;color:var(--ink-faint);margin:0 0 16px;line-height:1.6;white-space:pre-wrap}
   .field{margin-bottom:13px}
   .field label{display:block;font-size:12px;color:var(--ink-soft);margin-bottom:5px;font-weight:500;letter-spacing:.3px}
   .field label .opt{color:var(--ink-faint);font-weight:400}
@@ -269,6 +269,21 @@
 
   .leaf-note{font-size:11.5px;color:var(--ink-faint);margin:14px 4px 0;line-height:1.7;padding:12px 14px;background:var(--bg-soft);border-radius:12px;border-left:3px solid var(--sage)}
   .leaf-note b{color:var(--ink-soft)}
+  /* v1.5.1 价值曲线 */
+  .vc-card{padding-top:16px}
+  .vc-head{display:flex;justify-content:flex-end;margin-bottom:12px}
+  .vc-spans{display:inline-flex;gap:2px;background:var(--bg-soft);border-radius:10px;padding:3px}
+  .vc-span{border:none;background:transparent;font-family:var(--sans);font-size:12px;color:var(--ink-faint);padding:5px 12px;border-radius:8px;cursor:pointer;transition:.15s}
+  .vc-span.active{background:var(--surface);color:var(--sage-deep);font-weight:600;box-shadow:0 1px 3px rgba(0,0,0,.06)}
+  .vc-chart{width:100%;height:180px;position:relative}
+  .vc-chart svg{display:block;width:100%;height:100%;overflow:visible}
+  .vc-empty{display:grid;place-items:center;height:100%;color:var(--ink-faint);font-size:12.5px;text-align:center;line-height:1.7;padding:0 20px}
+  .vc-loss{margin-top:12px;font-size:12.5px;color:var(--clay);text-align:center;min-height:18px;font-weight:500}
+  .vc-loss b{font-family:var(--mono);font-weight:600}
+  .vc-hit{cursor:pointer}
+  .vc-tip{position:absolute;transform:translate(-50%,-100%);background:var(--sage-deep);color:#fff;font-size:11px;line-height:1.4;padding:5px 9px;border-radius:8px;white-space:nowrap;pointer-events:none;box-shadow:0 2px 8px rgba(0,0,0,.14);z-index:2}
+  .vc-tip::after{content:"";position:absolute;left:50%;top:100%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--sage-deep)}
+  .vc-tip b{font-family:var(--mono);font-weight:600}
 </style>
 </head>
 <body>
@@ -287,10 +302,10 @@
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 1-9 9 9 9 0 0 1-6.7-3"/><path d="M3 12a9 9 0 0 1 9-9 9 9 0 0 1 6.7 3"/><path d="M21 3v6h-6M3 21v-6h6"/></svg>
       </button>
       <button class="icon-btn" id="btnImport" title="导入">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></svg>
       </button>
       <button class="icon-btn" id="btnExport" title="导出">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 21V9m0 0l-4 4m4-4l4 4M5 3h14"/></svg>
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 3v12m0 0l-4-4m4 4l4-4M5 21h14"/></svg>
       </button>
     </div>
   </div>
@@ -369,6 +384,24 @@
       <div class="leaf-note" style="margin-top:16px">
         <b>CTDP</b>　先打响指预约，15 分钟内点「坐上座位·开始」即记一次成功预约并进入专注。
         专注必须计时满一小时自动完成才记 #N+1；中途放弃即判失败，主链清零、从 #1 重新开始。
+      </div>
+    </div>
+
+    <div class="section-title">价值曲线 · 神圣座位</div>
+    <div class="card vc-card">
+      <div class="vc-head">
+        <div class="vc-spans" id="vcSpans">
+          <button class="vc-span" data-span="week">周</button>
+          <button class="vc-span" data-span="month">月</button>
+          <button class="vc-span" data-span="quarter">季</button>
+          <button class="vc-span active" data-span="all">全部</button>
+        </div>
+      </div>
+      <div class="vc-chart" id="vcChart"></div>
+      <div class="vc-loss" id="vcLoss"></div>
+      <div class="leaf-note" style="margin-top:14px">
+        每成功专注一次，这条链的价值就非线性抬升一档；一旦中途放弃，整条链的全部价值会在那一刻<b>瞬间归零</b>。
+        曲线越高，你越不舍得断——这正是「神圣座位」的价值压缩。
       </div>
     </div>
   </div>
@@ -538,16 +571,17 @@ function defaultState(){
   return {
     version:1, created:new Date().toISOString(),
     tree:{ nodes:[], lastAddedDate:null },
-    ctdp:{ main:{count:0, history:[]}, aux:{count:0}, activeFocus:null, activeAux:null },
+    ctdp:{ main:{count:0, history:[], breaks:[]}, aux:{count:0}, activeFocus:null, activeAux:null },
     notify:{ dailyDigestAt:'' }   // 每日汇总提醒时间 'HH:MM'，空=不开汇总
   };
 }
 function migrate(s){
   if(!s.tree) s.tree = {nodes:[], lastAddedDate:null};
   if(!s.tree.nodes) s.tree.nodes = [];
-  if(!s.ctdp) s.ctdp = {main:{count:0,history:[]},aux:{count:0},activeFocus:null,activeAux:null};
-  if(!s.ctdp.main) s.ctdp.main = {count:0,history:[]};
+  if(!s.ctdp) s.ctdp = {main:{count:0,history:[],breaks:[]},aux:{count:0},activeFocus:null,activeAux:null};
+  if(!s.ctdp.main) s.ctdp.main = {count:0,history:[],breaks:[]};
   if(!s.ctdp.main.history) s.ctdp.main.history = [];
+  if(!s.ctdp.main.breaks) s.ctdp.main.breaks = [];   // v1.5.1 价值曲线：断链时间戳，用于画锯齿归零
   if(!s.ctdp.aux) s.ctdp.aux = {count:0};
   if(!s.notify) s.notify = {dailyDigestAt:'', tz:''};        // v1.4 提醒：补全局汇总时间
   if(s.notify.dailyDigestAt===undefined) s.notify.dailyDigestAt='';
@@ -624,6 +658,44 @@ async function supabaseCall(path, opts){
   return r.json();
 }
 
+// —— 冲突检测：判断“用 remote 覆盖 local”是否会改写 local 已有的数据 ——
+// 规则：只有当 local 已存在的内容被 remote 删改（定式节点消失/字段变、主链已有记录少了或变了）才算冲突；
+// 纯新增（remote 多出定式、主链只在末尾追加）不算冲突，静默接受。
+function nodeSig(n){ return JSON.stringify([n.content,n.name||'',n.parentId||null,n.checkMode||'sameday',n.remindAt||'',n.log||{}]); }
+// arr 前缀是否与 base 完全一致（base 是 arr 的前缀 = 只在末尾追加，无改写）
+function isPrefix(base, arr){
+  base=base||[]; arr=arr||[];
+  if(arr.length<base.length) return false;
+  for(let i=0;i<base.length;i++){ if(base[i]!==arr[i]) return false; }
+  return true;
+}
+// 返回冲突原因数组（空=无冲突，可静默覆盖）
+function findSyncConflicts(local, remote){
+  const reasons=[];
+  const lt=(local&&local.tree)||{}, rt=(remote&&remote.tree)||{};
+  const lNodes=lt.nodes||[], rNodes=rt.nodes||[];
+  const rMap={}; rNodes.forEach(n=>rMap[n.id]=n);
+  for(const ln of lNodes){
+    const rn=rMap[ln.id];
+    if(!rn){ reasons.push('本地定式「'+(ln.name||ln.content||ln.id)+'」在云端不存在'); continue; }
+    if(nodeSig(ln)!==nodeSig(rn)) reasons.push('定式「'+(ln.name||ln.content||ln.id)+'」内容/打卡与云端不一致');
+  }
+  const lm=((local&&local.ctdp)||{}).main||{}, rm=((remote&&remote.ctdp)||{}).main||{};
+  if(!isPrefix(lm.history, rm.history)) reasons.push('主链专注记录与云端不一致');
+  if(!isPrefix(lm.breaks, rm.breaks)) reasons.push('断链记录与云端不一致');
+  if((lm.count||0)>(rm.count||0) && !( (rm.history||[]).length>=(lm.history||[]).length )) reasons.push('主链节点数比云端多');
+  return reasons;
+}
+
+// 把 remote 应用为本地状态并落盘/重绘
+function applyRemote(incoming, remoteTs){
+  incoming._ts=remoteTs;
+  if(typeof migrate==='function') incoming=migrate(incoming);
+  state=incoming; localStorage.setItem(STORE_KEY, JSON.stringify(state));
+  if(typeof render==='function') render();
+  lastPushedTs=remoteTs;
+}
+
 // pull: 拿云端最新，跟本地合并
 async function syncPull(){
   if(!syncCfg.url||!syncCfg.key) return;
@@ -635,17 +707,49 @@ async function syncPull(){
       const remoteTs=row.updated_at||0;
       const localTs=state._ts||0;
       if(remoteTs>localTs){
-        // 云端更新 → 覆盖本地
         const incoming=row.data;
-        incoming._ts=remoteTs;
-        state=incoming; localStorage.setItem(STORE_KEY, JSON.stringify(state));
-        if(typeof render==='function') render();
-        lastPushedTs=remoteTs;
+        const conflicts=findSyncConflicts(state, incoming);
+        if(conflicts.length){
+          // 冲突：会改写本地已有数据 → 弹确认，交给用户选。默认（切走/关掉不选）保留本地。
+          isSyncing=false; setSyncDot('err');
+          promptSyncConflict(incoming, remoteTs, conflicts);
+          return;
+        }
+        // 无冲突（纯新增/追加）→ 静默接受云端
+        applyRemote(incoming, remoteTs);
       }
     }
     setSyncDot('on');
   }catch(e){ setSyncDot('err'); console.warn('pull fail',e); }
   isSyncing=false;
+}
+
+// 冲突弹窗：本地 vs 云端摘要，让用户选“保留本地”或“用云端覆盖”
+let _syncConflictPending=false;
+function stateBrief(s){
+  const nodes=((s&&s.tree)||{}).nodes||[];
+  const m=((s&&s.ctdp)||{}).main||{};
+  let checks=0; nodes.forEach(n=>{ checks+=Object.keys(n.log||{}).length; });
+  return nodes.length+' 条定式 · 主链 #'+(m.count||0)+' · 打卡 '+checks+' 次';
+}
+function promptSyncConflict(incoming, remoteTs, reasons){
+  if(_syncConflictPending) return;   // 避免重复弹
+  _syncConflictPending=true;
+  const desc='云端数据与本地不同，直接覆盖会改动本地已有内容：\n· '
+    + reasons.slice(0,4).join('\n· ')
+    + '\n\n本地：'+stateBrief(state)
+    + '\n云端：'+stateBrief(incoming)
+    + '\n\n用云端覆盖本地？（取消 = 保留本地并上传）';
+  confirmAct('云端数据冲突', desc, ()=>{
+    _syncConflictPending=false;
+    applyRemote(incoming, remoteTs);   // 用户确认 → 用云端覆盖
+    setSyncDot('on');
+  }, ()=>{
+    _syncConflictPending=false;
+    // 保留本地：顶新 _ts 推上云，让本地成为最新
+    state._ts=Date.now(); localStorage.setItem(STORE_KEY, JSON.stringify(state));
+    schedulePush();
+  }, '用云端覆盖', '保留本地');
 }
 
 // push: 推本地到云端
@@ -685,7 +789,7 @@ function updateSyncStatusUI(){
   const el=document.getElementById('syncStatus');
   if(!el) return;
   if(syncCfg.url&&syncCfg.key){
-    el.innerHTML='已连接 · '+syncCfg.url.replace(/^https?:\/\//,'').split('.')[0]+'<br>数据自动同步，冲突以最新为准';
+    el.innerHTML='已连接 · '+syncCfg.url.replace(/^https?:\/\//,'').split('.')[0]+'<br>数据自动同步，覆盖已有数据前会先确认';
   }else{
     el.innerHTML='未连接 · 仅本地存储。填写下方信息开启多设备同步。';
   }
@@ -945,6 +1049,7 @@ function renderCTDP(){
     document.getElementById('btnStart').style.display = auxLive ? '' : 'none';
     document.getElementById('btnClear').style.display='none';
   }
+  renderValueCurve();
 }
 
 function tick(){
@@ -975,6 +1080,136 @@ function completeFocus(){
   toast('专注完成 · #'+state.ctdp.main.count+' 🎉');
 }
 
+/* ---------- v1.5.1 价值曲线（神圣座位非线性价值压缩的可视化）----------
+   chainValue(k)：链长 k 的心理价值，复利式温和凸，r=1.15。#1=1、#10≈20、#20≈93。
+   buildValueSeries()：归并 history(成功升值) 与 breaks(断链归零)，按时间回放成事件点串。 */
+const VALUE_R = 1.15;
+function chainValue(k){ return k<=0 ? 0 : (Math.pow(VALUE_R,k)-1)/(VALUE_R-1); }
+function buildValueSeries(){
+  const m = state.ctdp.main||{};
+  const succ = (m.history||[]).map(t=>({t:new Date(t).getTime(), type:'s'})).filter(e=>!isNaN(e.t));
+  const brk  = (m.breaks ||[]).map(t=>({t:new Date(t).getTime(), type:'b'})).filter(e=>!isNaN(e.t));
+  const evs = succ.concat(brk).sort((a,b)=> a.t===b.t ? (a.type==='b'?1:-1) : a.t-b.t); // 同刻先升后断
+  let k=0; const pts=[];
+  for(const e of evs){
+    if(e.type==='s'){ k+=1; pts.push({t:e.t, k, value:chainValue(k)}); }
+    else { k=0; pts.push({t:e.t, k:0, value:0}); }
+  }
+  return pts; // [{t(ms), k, value}]
+}
+
+// 当前跨度选择（week/month/quarter/all），起点=现在-跨度，终点恒为现在
+let vcSpan = 'all';
+const VC_SPAN_MS = { week: 7*864e5, month: 30*864e5, quarter: 90*864e5 };
+function svgEsc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+// 根据时间跨度选刻度：返回 {stepMs, fmt}
+function vcTicks(spanMs){
+  const H=36e5, D=864e5;
+  if(spanMs<=2*D)   return {step:6*H,  fmt:d=>`${d.getHours()}时`};
+  if(spanMs<=14*D)  return {step:D,    fmt:d=>`${d.getMonth()+1}/${d.getDate()}`};
+  if(spanMs<=70*D)  return {step:7*D,  fmt:d=>`${d.getMonth()+1}/${d.getDate()}`};
+  return {step:30*D, fmt:d=>`${d.getMonth()+1}月`};
+}
+function renderValueCurve(){
+  const host = document.getElementById('vcChart');
+  const lossEl = document.getElementById('vcLoss');
+  if(!host) return;
+  const all = buildValueSeries();
+  const now = Date.now();
+  const curVal = chainValue(state.ctdp.main.count||0);
+
+  // 断链损失预览
+  if((state.ctdp.main.count||0) > 0){
+    lossEl.innerHTML = `现在断 = 瞬间失去当前 #${state.ctdp.main.count} 全链价值 <b>${curVal.toFixed(1)}</b>`;
+  } else {
+    lossEl.textContent = '';
+  }
+
+  if(all.length===0){
+    host.innerHTML = `<div class="vc-empty">还没有成功专注的记录。<br>完成第一次一小时专注，价值曲线就从 #1 开始生长。</div>`;
+    return;
+  }
+
+  // 时间窗
+  const t1 = now;
+  const t0 = vcSpan==='all' ? Math.min(all[0].t, t1-36e5) : t1 - VC_SPAN_MS[vcSpan];
+  // 起点前最后一个状态（价值 & k），作为窗口左端起点
+  let startVal = 0;
+  for(const p of all){ if(p.t < t0) startVal = p.value; else break; }
+  // 窗口内的点 + 左右端点
+  const inWin = all.filter(p=> p.t>=t0 && p.t<=t1);
+  const maxVal = Math.max(curVal, ...all.map(p=>p.value), 1);
+
+  // 画布尺寸（用容器实际像素，避免 viewBox 拉伸导致文字/圆点变形）
+  const W = Math.max(240, host.clientWidth||320), Hh=180, padL=8, padR=8, padT=14, padB=24;
+  const x = t => padL + (W-padL-padR) * (t - t0) / Math.max(1, t1 - t0);
+  const y = v => padT + (Hh-padT-padB) * (1 - v/maxVal);
+
+  // 构造阶梯锯齿路径：从 (t0,startVal) 起，遇成功先水平到该时刻再垂直抬升，遇断链垂直落 0
+  let curV = startVal;
+  let d = `M ${x(t0).toFixed(1)} ${y(curV).toFixed(1)}`;
+  const dots = [];
+  for(const p of inWin){
+    d += ` L ${x(p.t).toFixed(1)} ${y(curV).toFixed(1)}`;      // 水平推进到事件时刻
+    d += ` L ${x(p.t).toFixed(1)} ${y(p.value).toFixed(1)}`;   // 垂直：成功抬升 / 断链掉0
+    curV = p.value;
+    if(p.k>0) dots.push({x:x(p.t), y:y(p.value), k:p.k, t:p.t});
+  }
+  d += ` L ${x(t1).toFixed(1)} ${y(curV).toFixed(1)}`;          // 水平延伸到现在
+  // 面积填充路径
+  const area = d + ` L ${x(t1).toFixed(1)} ${y(0).toFixed(1)} L ${x(t0).toFixed(1)} ${y(0).toFixed(1)} Z`;
+
+  // x 轴刻度
+  const {step, fmt} = vcTicks(t1-t0);
+  let ticks='';
+  const first = Math.ceil(t0/step)*step;
+  for(let tv=first; tv<=t1; tv+=step){
+    const xx=x(tv);
+    ticks += `<line x1="${xx.toFixed(1)}" y1="${padT}" x2="${xx.toFixed(1)}" y2="${(Hh-padB).toFixed(1)}" stroke="var(--line-soft)" stroke-width="1"/>`;
+    ticks += `<text x="${xx.toFixed(1)}" y="${(Hh-padB+14).toFixed(1)}" text-anchor="middle" font-size="9" fill="var(--ink-faint)">${svgEsc(fmt(new Date(tv)))}</text>`;
+  }
+  // 端点（当前 #N）高亮
+  const endX=x(t1), endY=y(curV);
+  const endDot = curV>0 ? `<circle cx="${endX.toFixed(1)}" cy="${endY.toFixed(1)}" r="4" fill="var(--sage-deep)"/><text x="${(endX-6).toFixed(1)}" y="${(endY-8).toFixed(1)}" text-anchor="end" font-size="11" font-weight="600" fill="var(--sage-deep)">#${state.ctdp.main.count}</text>` : '';
+  const dotsSvg = dots.map(dt=>`<circle cx="${dt.x.toFixed(1)}" cy="${dt.y.toFixed(1)}" r="2.2" fill="var(--sage)"/>`).join('');
+  // 可点热区（放大透明圆），点击显示该次专注开始时间（= 完成时间 − 60min）
+  const hitSvg = dots.map(dt=>`<circle class="vc-hit" cx="${dt.x.toFixed(1)}" cy="${dt.y.toFixed(1)}" r="11" fill="transparent" data-k="${dt.k}" data-x="${dt.x.toFixed(1)}" data-y="${dt.y.toFixed(1)}" data-start="${dt.t - FOCUS_MIN*60*1000}"/>`).join('');
+
+  host.innerHTML =
+    `<svg viewBox="0 0 ${W} ${Hh}">
+      <defs><linearGradient id="vcGrad" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="var(--sage)" stop-opacity="0.28"/>
+        <stop offset="1" stop-color="var(--sage)" stop-opacity="0.02"/>
+      </linearGradient></defs>
+      ${ticks}
+      <path d="${area}" fill="url(#vcGrad)" stroke="none"/>
+      <path d="${d}" fill="none" stroke="var(--sage)" stroke-width="2" stroke-linejoin="round"/>
+      ${dotsSvg}${endDot}${hitSvg}
+    </svg>`;
+
+  // 点击圆点 → 气泡显示开始时间；点空白处或再次点击关闭
+  const scale = (host.clientWidth||W) / W;   // viewBox→像素缩放（横向填满，纵向按 svg 高度）
+  const yScale = (host.clientHeight||Hh) / Hh;
+  function fmtStart(ms){ const d=new Date(ms); const p=n=>String(n).padStart(2,'0'); return `${d.getMonth()+1}/${d.getDate()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+  function closeTip(){ const t=host.querySelector('.vc-tip'); if(t) t.remove(); }
+  host.querySelectorAll('.vc-hit').forEach(h=>{
+    h.addEventListener('click', (ev)=>{
+      ev.stopPropagation();
+      const existing = host.querySelector('.vc-tip');
+      const kk = h.getAttribute('data-k');
+      closeTip();
+      if(existing && existing.dataset.k===kk) return;  // 再次点同一点 → 关闭
+      const tip = document.createElement('div');
+      tip.className='vc-tip'; tip.dataset.k=kk;
+      tip.innerHTML = `#${kk} · 开始 <b>${fmtStart(+h.getAttribute('data-start'))}</b>`;
+      tip.style.left = (parseFloat(h.getAttribute('data-x'))*scale)+'px';
+      tip.style.top  = (parseFloat(h.getAttribute('data-y'))*yScale - 6)+'px';
+      host.appendChild(tip);
+    });
+  });
+  host.addEventListener('click', closeTip);
+}
+
 /* =========================================================
    ACTIONS
    ========================================================= */
@@ -985,6 +1220,7 @@ document.querySelectorAll('.tab[data-view]').forEach(t=>{
     document.querySelectorAll('.view').forEach(x=>x.classList.remove('active'));
     t.classList.add('active');
     document.getElementById('view-'+t.dataset.view).classList.add('active');
+    if(t.dataset.view==='ctdp') renderValueCurve(); // 切到 CTDP 后按真实宽度重绘曲线
   });
 });
 
@@ -1386,14 +1622,18 @@ document.getElementById('diagCards').addEventListener('click', e=>{
 
 /* ---------- confirm sheet ---------- */
 let confirmCb = null;
-function confirmAct(title, desc, cb){
+let confirmCancelCb = null;
+function confirmAct(title, desc, cb, onCancel, okLabel, cancelLabel){
   document.getElementById('confirmTitle').textContent=title;
   document.getElementById('confirmDesc').textContent=desc;
+  document.getElementById('confirmOk').textContent=okLabel||'确认';
+  document.getElementById('confirmCancel').textContent=cancelLabel||'取消';
   confirmCb=cb;
+  confirmCancelCb=onCancel||null;
   openSheet('confirmSheet');
 }
-document.getElementById('confirmCancel').addEventListener('click', closeSheets);
-document.getElementById('confirmOk').addEventListener('click', ()=>{ const f=confirmCb; confirmCb=null; closeSheets(); if(f) f(); });
+document.getElementById('confirmCancel').addEventListener('click', ()=>{ const g=confirmCancelCb; confirmCb=null; confirmCancelCb=null; closeSheets(); if(g) g(); });
+document.getElementById('confirmOk').addEventListener('click', ()=>{ const f=confirmCb; confirmCb=null; confirmCancelCb=null; closeSheets(); if(f) f(); });
 
 /* ---------- sheets ---------- */
 function openSheet(id){ document.getElementById('scrim').classList.add('show'); document.getElementById(id).classList.add('show'); }
@@ -1432,9 +1672,17 @@ document.getElementById('btnStart').addEventListener('click', ()=>{
 });
 document.getElementById('btnClear').addEventListener('click', ()=>{
   confirmAct('放弃 · 判失败','中途停止即视为本次专注失败，主链节点数清零、从 #1 重新开始。确认放弃？',()=>{
+    if(state.ctdp.main.count>0){ (state.ctdp.main.breaks=state.ctdp.main.breaks||[]).push(new Date().toISOString()); } // v1.5.1 记断链，价值曲线归零
     state.ctdp.activeFocus=null; state.ctdp.main.count=0;
     save(); render(); toast('已放弃 · 主链清零', true);
   });
+});
+// v1.5.1 价值曲线跨度切换
+document.getElementById('vcSpans').addEventListener('click', e=>{
+  const b = e.target.closest('.vc-span'); if(!b) return;
+  vcSpan = b.dataset.span;
+  document.querySelectorAll('#vcSpans .vc-span').forEach(x=>x.classList.toggle('active', x===b));
+  renderValueCurve();
 });
 
 /* ---------- export / import ---------- */
